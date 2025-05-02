@@ -22,6 +22,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"github.com/bmatcuk/doublestar/v4"
 )
 
 // Parse env vars into a map
@@ -587,10 +588,14 @@ func getAllTerragruntFiles(path string) ([]string, error) {
 	if len(filterPaths) > 0 && len(projectHclFiles) == 0 {
 		workingPaths = []string{}
 		for _, filterPath := range filterPaths {
-			// get all matching folders
-			theseWorkingPaths, err := filepath.Glob(filterPath)
+			// get all matching folders using doublestar v4 API
+			theseWorkingPaths, err := doublestar.Glob(os.DirFS("."), filterPath)
 			if err != nil {
 				return nil, err
+			}
+			// doublestar.Glob returns paths relative to the fs root, so join with "." if needed
+			for i, p := range theseWorkingPaths {
+				theseWorkingPaths[i] = filepath.Join(".", p)
 			}
 			workingPaths = append(workingPaths, theseWorkingPaths...)
 		}
