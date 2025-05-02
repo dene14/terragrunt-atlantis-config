@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"math/rand"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -443,7 +443,217 @@ func TestChainedDependencies(t *testing.T) {
 	})
 }
 
-func TestChainedDependenciesHiddenBehindFlag(t *testing.T) {
+func TestGetEnhancedGlobMatches(t *testing.T) {
+	// Create temporary test directory structure
+	tempDir, err := ioutil.TempDir("", "doublestar-test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create test directory structure
+	dirs := []string{
+		"environments/prod/service",
+		"environments/staging/service",
+		"modules/service/terraform",
+		"modules/database/terraform",
+	}
+
+	for _, dir := range dirs {
+		err := os.MkdirAll(filepath.Join(tempDir, dir), 0755)
+		if err != nil {
+			t.Fatalf("failed to create directory %s: %v", dir, err)
+		}
+		// Create a dummy file in each directory
+		err = ioutil.WriteFile(filepath.Join(tempDir, dir, "main.tf"), []byte("# Test file"), 0644)
+		if err != nil {
+			t.Fatalf("failed to create file in %s: %v", dir, err)
+		}
+	}
+
+	// Save current directory
+	currentDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current directory: %v", err)
+	}
+
+	// Change to temp directory for testing
+	err = os.Chdir(tempDir)
+	if err != nil {
+		t.Fatalf("failed to change to temp directory: %v", err)
+	}
+	defer os.Chdir(currentDir)
+
+	tests := []struct {
+		name        string
+		pattern     string
+		expectErr   bool
+		validate    func([]string) bool
+	}{
+		{
+			name:    "basic glob",
+			pattern: "modules/*",
+			validate: func(matches []string) bool {
+				return len(matches) >= 2 && 
+				       contains(matches, "modules/service") && 
+					   contains(matches, "modules/database")
+			},
+		},
+		{
+			name:    "recursive glob",
+			pattern: "**/terraform",
+			validate: func(matches []string) bool {
+				return len(matches) >= 2 && 
+				       contains(matches, "modules/service/terraform") && 
+					   contains(matches, "modules/database/terraform")
+			},
+		},
+		{
+			name:    "brace expansion",
+			pattern: "environments/{prod,staging}/**",
+			validate: func(matches []string) bool {
+				hasProduction := false
+				hasStaging := false
+				for _, match := range matches {
+					if strings.Contains(match, "prod") {
+						hasProduction = true
+					}
+					if strings.Contains(match, "staging") {
+						hasStaging = true
+					}
+				}
+				return hasProduction && hasStaging
+			},
+		},
+		{
+			name:    "file url pattern",
+			pattern: "file://modules/**",
+			validate: func(matches []string) bool {
+				// Should handle file:// prefix properly
+				return len(matches) >= 1 && 
+				       contains(matches, "modules/service") && 
+					   !contains(matches, "file://")
+			},
+		},
+		{
+			name:    "directory without glob",
+			pattern: "modules",
+			validate: func(matches []string) bool {
+				// Should append /** automatically
+				hasModules := false
+				hasService := false
+				hasDatabase := false
+				for _, match := range matches {
+					if match == "modules" {
+						hasModules = true
+					}
+					if strings.Contains(match, "modules/service") {
+						hasService = true
+					}
+					if strings.Contains(match, "modules/database") {
+						hasDatabase = true
+					}
+				}
+				return hasModules && hasService && hasDatabase
+			},
+		},
+		{
+			name:      "invalid pattern",
+			pattern:   "[invalid",
+			expectErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			matches, err := getEnhancedGlobMatches(tt.pattern)
+			
+			if tt.expectErr {
+				if err == nil {
+					t.Errorf("expected error for pattern %s, got nil", tt.pattern)
+				}
+				return
+			}
+			
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+			
+			if tt.validate != nil && !tt.validate(matches) {
+				t.Errorf("validation failed for matches: %v", matches)
+			}
+		})
+	}
+}
+
+// contains checks if a slice of strings contains elements matching the substring
+func contains(slice []string, substr string) bool {
+	for _, item := range slice {
+		if strings.Contains(item, substr) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestGetEnhancedGlobMatchesEdgeCases(t *testing.T) {
+	tests := []struct {
+		name        string
+		pattern     string
+		expectEmpty bool
+		expectErr   bool
+	}{
+		{
+			name:        "empty pattern",
+			pattern:     "",
+			expectEmpty: true,
+		},
+		{
+			name:        "just wildcards",
+			pattern:     "**",
+			expectEmpty: false, // Should match everything
+		},
+		{
+			name:        "relative parent",
+			pattern:     "../**",
+			expectEmpty: false, // Should match parent directory contents if it exists
+		},
+		{
+			name:        "absolute path that doesn't exist",
+			pattern:     "/non/existent/path/**",
+			expectEmpty: true, // Should be empty since the path doesn't exist
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			matches, err := getEnhancedGlobMatches(tt.pattern)
+			
+			if tt.expectErr {
+				if err == nil {
+					t.Errorf("expected error for pattern %s, got nil", tt.pattern)
+				}
+				return
+			}
+			
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+			
+			if tt.expectEmpty && len(matches) > 0 {
+				t.Errorf("expected empty result for pattern %s, got %v", tt.pattern, matches)
+			}
+			
+			if !tt.expectEmpty && len(matches) == 0 {
+				t.Errorf("expected non-empty result for pattern %s, got empty", tt.pattern)
+			}
+		})
+	}
+}
+
+func TestCreateProject(t *testing.T) {
 	runTest(t, filepath.Join("golden", "chained_dependency_no_flag.yaml"), []string{
 		"--root",
 		filepath.Join("..", "test_examples", "chained_dependencies"),

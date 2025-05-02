@@ -1,17 +1,18 @@
 module github.com/transcend-io/terragrunt-atlantis-config
 
-go 1.21
-
-toolchain go1.21.3
+go 1.14
 
 require (
-	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32
-	github.com/gruntwork-io/go-commons v0.17.1
-	github.com/gruntwork-io/terragrunt v0.54.1
-	github.com/hashicorp/go-getter v1.7.5
-	github.com/hashicorp/hcl/v2 v2.17.0
-	github.com/hashicorp/terraform-config-inspect v0.0.0-20210625153042-09f34846faab
-	github.com/sirupsen/logrus v1.9.3
+	github.com/bmatcuk/doublestar/v2 v2.0.4
+	github.com/ghodss/yaml v1.0.0
+	github.com/hashicorp/go-version v1.2.1
+	github.com/hashicorp/hcl/v2 v2.9.1
+	github.com/imdario/mergo v0.3.11
+	github.com/spf13/cobra v1.0.0
+	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/zclconf/go-cty v1.8.1
+	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
+)
 	github.com/spf13/cobra v1.2.1
 	github.com/stretchr/testify v1.8.4
 	github.com/zclconf/go-cty v1.13.2

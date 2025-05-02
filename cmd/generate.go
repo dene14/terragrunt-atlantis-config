@@ -1,13 +1,15 @@
 package cmd
 
 import (
-	"regexp"
-	"sort"
+	"bytes"
+	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 
-	"github.com/hashicorp/go-getter"
-	log "github.com/sirupsen/logrus"
-
-	"github.com/ghodss/yaml"
+	"github.com/bmatcuk/doublestar/v2"
 	"github.com/gruntwork-io/terragrunt/config"
 	"github.com/gruntwork-io/terragrunt/options"
 	"github.com/spf13/cobra"
@@ -585,15 +587,34 @@ func getAllTerragruntFiles(path string) ([]string, error) {
 
 	// filters are not working (yet) if using project hcl files (which are kind of filters by themselves)
 	if len(filterPaths) > 0 && len(projectHclFiles) == 0 {
-		workingPaths = []string{}
+		var allMatchingPaths []string
+		
+		// Process each filter pattern
 		for _, filterPath := range filterPaths {
-			// get all matching folders
-			theseWorkingPaths, err := filepath.Glob(filterPath)
+			// get all matching paths with enhanced glob support
+			matches, err := getEnhancedGlobMatches(filterPath)
 			if err != nil {
 				return nil, err
 			}
-			workingPaths = append(workingPaths, theseWorkingPaths...)
+			
+			// Add unique matches to the working paths
+			for _, match := range matches {
+				// Check if path is already included
+				found := false
+				for _, existing := range allMatchingPaths {
+					if existing == match {
+						found = true
+						break
+					}
+				}
+				if !found {
+					allMatchingPaths = append(allMatchingPaths, match)
+				}
+			}
 		}
+		
+		// Use matched paths as working paths
+		workingPaths = allMatchingPaths
 	}
 
 	uniqueConfigFilePaths := make(map[string]bool)
@@ -657,7 +678,42 @@ func getAllTerragruntProjectHclFiles() map[string][]string {
 	return uniqueHclFileAbsPaths
 }
 
-func main(cmd *cobra.Command, args []string) error {
+// getEnhancedGlobMatches returns paths matching the given pattern using enhanced glob support
+func getEnhancedGlobMatches(pattern string) ([]string, error) {
+	// Handle file:// prefix
+	pattern = strings.TrimPrefix(pattern, "file://")
+	
+	// Normalize pattern for cross-platform compatibility
+	normalizedPattern := filepath.ToSlash(pattern)
+	
+	// If pattern doesn't contain any glob characters, append /** for recursive matching
+	if !strings.ContainsAny(normalizedPattern, "*?[{") {
+		normalizedPattern = filepath.Join(normalizedPattern, "**")
+	}
+	
+	// Use doublestar for enhanced glob matching
+	matches, err := doublestar.Glob(normalizedPattern)
+	if err != nil {
+		return nil, fmt.Errorf("invalid filter pattern %q: %w", pattern, err)
+	}
+	
+	// Normalize all matched paths
+	normalizedMatches := make([]string, 0, len(matches))
+	for _, match := range matches {
+		// Convert match to platform-specific path format if needed
+		if filepath.Separator != '/' {
+			match = filepath.FromSlash(match)
+		}
+		
+		// Ensure consistent path format
+		match = filepath.Clean(match)
+		normalizedMatches = append(normalizedMatches, match)
+	}
+	
+	return normalizedMatches, nil
+}
+
+func main() {
 	// Ensure the gitRoot has a trailing slash and is an absolute path
 	absoluteGitRoot, err := filepath.Abs(gitRoot)
 	if err != nil {
@@ -974,7 +1030,7 @@ func init() {
 	generateCmd.PersistentFlags().BoolVar(&createHclProjectExternalChilds, "create-hcl-project-external-childs", true, "Creates Atlantis projects for terragrunt child modules outside the directories containing the HCL files defined in --project-hcl-files")
 	generateCmd.PersistentFlags().BoolVar(&useProjectMarkers, "use-project-markers", false, "Creates Atlantis projects only for project hcl files with locals: atlantis_project = true")
 	generateCmd.PersistentFlags().BoolVar(&executionOrderGroups, "execution-order-groups", false, "Computes execution_order_groups for projects")
-	generateCmd.PersistentFlags().BoolVar(&dependsOn, "depends-on", false, "Computes depends_on for projects. Requires --create-project-name.")
+	generateCmd.PersistentFlags().StringSliceVar(&filterPaths, "filter", []string{}, "Comma-separated paths or enhanced glob expressions to the directories you want scope down the config for. Supports recursive matching with '**', brace expansion with '{pattern1,pattern2}', and other advanced patterns. Default is all files in root.")
 }
 
 // Runs a set of arguments, returning the output
