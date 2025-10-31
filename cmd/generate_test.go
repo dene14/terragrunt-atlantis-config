@@ -58,8 +58,15 @@ func runTest(t *testing.T, goldenFile string, args []string) {
 		return
 	}
 
+	// Ensure test_artifacts directory exists
+	testArtifactsDir := "test_artifacts"
+	if err := os.MkdirAll(testArtifactsDir, 0755); err != nil {
+		t.Errorf("Failed to create test_artifacts directory: %v", err)
+		return
+	}
+
 	randomInt := rand.Int()
-	filename := filepath.Join("test_artifacts", fmt.Sprintf("%d.yaml", randomInt))
+	filename := filepath.Join(testArtifactsDir, fmt.Sprintf("%d.yaml", randomInt))
 	defer os.Remove(filename)
 
 	allArgs := append([]string{
@@ -181,13 +188,11 @@ func TestNonStringErrorOnExtraDeclaredDependencies(t *testing.T) {
 		filepath.Join("..", "test_examples_errors", "extra_dependency_error"),
 	})
 	err = rootCmd.Execute()
-	
+
 	expectedError := "extra_atlantis_dependencies contains non-string value at position 4"
 	if err == nil || err.Error() != expectedError {
 		t.Errorf("Expected error '%s', got '%v'", expectedError, err)
-		return
 	}
-	return
 }
 
 func TestLocalTerraformModuleSource(t *testing.T) {
