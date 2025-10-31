@@ -511,6 +511,24 @@ projects:
     when_modified:
     - '*.hcl'
     - '*.tf*'
+  dir: stacks_hcl_example/app
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+  dir: stacks_hcl_example/database
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+  dir: stacks_hcl_example/vpc
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
     - ../../../shared/vpc/terragrunt.hcl
   dir: stacks_with_patterns/environments/production/app
 - autoplan:

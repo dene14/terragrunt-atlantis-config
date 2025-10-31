@@ -1,8 +1,14 @@
 package cmd
 
 import (
+	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/gruntwork-io/terragrunt/config"
+	"github.com/gruntwork-io/terragrunt/options"
+	log "github.com/sirupsen/logrus"
 )
 
 // Stack represents a logical grouping of Terragrunt modules
@@ -97,10 +103,21 @@ func NewStackManager(config StackManagerConfig) *StackManager {
 }
 
 // DiscoverStacks discovers all stacks from configured sources
+// Priority order:
+// 1. HCL stack files (terragrunt.stack.hcl) - Primary method per Terragrunt official docs
+// 2. External definition file (YAML/JSON) - Legacy/alternative method
+// 3. Directory inference - Future implementation
 func (sm *StackManager) DiscoverStacks() ([]Stack, error) {
 	var discoveredStacks []Stack
 
-	// Source 1: External definition file
+	// Source 1: HCL stack files (terragrunt.stack.hcl) - PRIMARY METHOD
+	stacks, err := sm.loadStackHclFiles()
+	if err != nil {
+		return nil, err
+	}
+	discoveredStacks = append(discoveredStacks, stacks...)
+
+	// Source 2: External definition file (YAML/JSON) - LEGACY/ALTERNATIVE
 	if sm.config.DefinitionFile != "" {
 		stacks, err := sm.loadStackDefinitionFile()
 		if err != nil {
@@ -109,7 +126,7 @@ func (sm *StackManager) DiscoverStacks() ([]Stack, error) {
 		discoveredStacks = append(discoveredStacks, stacks...)
 	}
 
-	// Source 2: Directory inference
+	// Source 3: Directory inference
 	if sm.config.InferFromDir {
 		stacks, err := sm.inferStacksFromDirectory()
 		if err != nil {
@@ -118,7 +135,6 @@ func (sm *StackManager) DiscoverStacks() ([]Stack, error) {
 		discoveredStacks = append(discoveredStacks, stacks...)
 	}
 
-	// TODO: Source 3: HCL stack blocks
 	// TODO: Source 4: Module-level tags
 
 	sm.stacks = discoveredStacks
@@ -194,10 +210,46 @@ func (sm *StackManager) GenerateStackProject(stack Stack) (*AtlantisProject, err
 	return project, nil
 }
 
-// Helper methods (stubs for now - would be implemented fully)
+// Helper methods
+
+// loadStackHclFiles discovers and parses terragrunt.stack.hcl files
+func (sm *StackManager) loadStackHclFiles() ([]Stack, error) {
+	// Find all terragrunt.stack.hcl files
+	stackFiles, err := FindStackHclFiles(sm.config.GitRoot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find stack HCL files: %w", err)
+	}
+
+	if len(stackFiles) == 0 {
+		// No stack files found, that's okay
+		return []Stack{}, nil
+	}
+
+	// Create parsing context - use empty options for now
+	// TODO: Pass actual terragrunt options if available
+	terragruntOptions := options.NewTerragruntOptions()
+	ctx := config.NewParsingContext(context.Background(), terragruntOptions)
+
+	// Parse each stack file
+	stackDefinitions := []StackHclDefinition{}
+	for _, stackFile := range stackFiles {
+		def, err := ParseStackHclFile(stackFile, ctx)
+		if err != nil {
+			log.Warnf("Failed to parse stack HCL file %s: %v", stackFile, err)
+			continue
+		}
+		stackDefinitions = append(stackDefinitions, *def)
+	}
+
+	// Convert to internal Stack structs
+	stacks := ConvertStackHclToStacks(stackDefinitions, sm.config.GitRoot)
+	log.Infof("Discovered %d stack(s) from %d terragrunt.stack.hcl file(s)", len(stacks), len(stackFiles))
+
+	return stacks, nil
+}
 
 func (sm *StackManager) loadStackDefinitionFile() ([]Stack, error) {
-	// Parse the stack definition file
+	// Parse the stack definition file (YAML/JSON - legacy method)
 	stackDef, err := ParseStackDefinitionFile(sm.config.DefinitionFile)
 	if err != nil {
 		return nil, err
