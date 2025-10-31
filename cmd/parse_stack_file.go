@@ -277,5 +277,3 @@ stacks:
 	log.Infof("Generated stack definition template at %s", outputPath)
 	return nil
 }
-
-

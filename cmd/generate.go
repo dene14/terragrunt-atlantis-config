@@ -1,9 +1,10 @@
 package cmd
 
 import (
-	"github.com/gruntwork-io/terragrunt/util"
 	"regexp"
 	"sort"
+
+	"github.com/gruntwork-io/terragrunt/util"
 
 	"github.com/hashicorp/go-getter"
 	log "github.com/sirupsen/logrus"
@@ -18,6 +19,7 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -935,7 +937,18 @@ func main(cmd *cobra.Command, args []string) error {
 
 	// Write output
 	if len(outputPath) != 0 {
-		os.WriteFile(outputPath, []byte(yamlString), 0644)
+		// Ensure the directory exists before writing
+		outputDir := filepath.Dir(outputPath)
+		// Only create directory if it's not the current directory or empty
+		// filepath.Dir returns "." for files in current directory, which already exists
+		if outputDir != "." && outputDir != "" {
+			if err := os.MkdirAll(outputDir, 0755); err != nil {
+				return fmt.Errorf("failed to create output directory: %w", err)
+			}
+		}
+		if err := os.WriteFile(outputPath, []byte(yamlString), 0644); err != nil {
+			return fmt.Errorf("failed to write output file: %w", err)
+		}
 	} else {
 		log.Println(yamlString)
 	}

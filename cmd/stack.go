@@ -1,5 +1,10 @@
 package cmd
 
+import (
+	"path/filepath"
+	"strings"
+)
+
 // Stack represents a logical grouping of Terragrunt modules
 type Stack struct {
 	// Unique name for the stack
@@ -64,21 +69,21 @@ type AtlantisStackConfig struct {
 
 // StackManagerConfig configures the stack manager
 type StackManagerConfig struct {
-	GitRoot           string
-	DefinitionFile    string
-	InferFromDir      bool
-	DirectoryDepth    int
-	AllowMultiStack   bool
-	StackMarkerFile   string
-	ValidateCoverage  bool
+	GitRoot          string
+	DefinitionFile   string
+	InferFromDir     bool
+	DirectoryDepth   int
+	AllowMultiStack  bool
+	StackMarkerFile  string
+	ValidateCoverage bool
 }
 
 // StackManager manages stack discovery and project generation
 type StackManager struct {
-	config            StackManagerConfig
-	stacks            []Stack
-	moduleToStacks    map[string][]string
-	stackToModules    map[string][]string
+	config         StackManagerConfig
+	stacks         []Stack
+	moduleToStacks map[string][]string
+	stackToModules map[string][]string
 }
 
 // NewStackManager creates a new stack manager
@@ -192,8 +197,15 @@ func (sm *StackManager) GenerateStackProject(stack Stack) (*AtlantisProject, err
 // Helper methods (stubs for now - would be implemented fully)
 
 func (sm *StackManager) loadStackDefinitionFile() ([]Stack, error) {
-	// TODO: Implement YAML/JSON parsing
-	return []Stack{}, nil
+	// Parse the stack definition file
+	stackDef, err := ParseStackDefinitionFile(sm.config.DefinitionFile)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert external stack configs to internal Stack structs
+	stacks := ConvertExternalStacksToStacks(stackDef.Stacks, sm.config.GitRoot)
+	return stacks, nil
 }
 
 func (sm *StackManager) inferStacksFromDirectory() ([]Stack, error) {
@@ -202,7 +214,31 @@ func (sm *StackManager) inferStacksFromDirectory() ([]Stack, error) {
 }
 
 func (sm *StackManager) moduleMatchesStack(module string, stack Stack) bool {
-	// TODO: Implement glob pattern matching for include/exclude
+	// Convert stack to ExternalStackConfig format for matching
+	extStack := ExternalStackConfig{
+		Name:    stack.Name,
+		Include: []string{}, // Will be populated if needed
+		Exclude: []string{},
+		Modules: stack.Modules,
+	}
+
+	// Use the MatchModuleToStacks function to check if module matches
+	// We need to normalize the module path relative to gitRoot
+	relModule, err := filepath.Rel(sm.config.GitRoot, module)
+	if err != nil {
+		// If relative path calculation fails, use absolute path
+		relModule = module
+	}
+	relModule = filepath.ToSlash(relModule)
+
+	// Check explicit module list
+	for _, explicitModule := range extStack.Modules {
+		explicitModule = filepath.ToSlash(explicitModule)
+		if strings.HasSuffix(relModule, explicitModule) || relModule == explicitModule {
+			return true
+		}
+	}
+
 	return false
 }
 
@@ -221,5 +257,3 @@ func (sm *StackManager) ValidateStackCoverage(allModules []string) error {
 	// TODO: Implement validation
 	return nil
 }
-
-
