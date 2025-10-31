@@ -1,0 +1,365 @@
+package cmd
+
+// This file shows how stack support would be integrated into the main generate.go
+// It's marked as .example so it doesn't interfere with compilation
+
+/*
+===================================================================================
+INTEGRATION POINT 1: Add global variables to cmd/generate.go
+===================================================================================
+*/
+
+var (
+	// ... existing variables ...
+	
+	// Stack-related flags
+	enableStacks                 bool
+	stackDefinitionFile          string
+	stackLevelProjects          bool
+	moduleLevelProjects         bool
+	inferStacks                 bool
+	stackDirectoryDepth         int
+	stackMarkerFile             string
+	validateStackCoverage       bool
+	allowMultiStack             bool
+	stackWorkspacePrefix        string
+)
+
+/*
+===================================================================================
+INTEGRATION POINT 2: Add CLI flags in init() function
+===================================================================================
+*/
+
+func init() {
+	// ... existing flags ...
+	
+	// Stack support flags
+	generateCmd.PersistentFlags().BoolVar(&enableStacks, "enable-stacks", false, "Enable stack support")
+	generateCmd.PersistentFlags().StringVar(&stackDefinitionFile, "stack-definition-file", "atlantis-stacks.yaml", "Path to stack definition file")
+	generateCmd.PersistentFlags().BoolVar(&stackLevelProjects, "stack-level-projects", false, "Generate Atlantis projects at stack level")
+	generateCmd.PersistentFlags().BoolVar(&moduleLevelProjects, "module-level-projects", true, "Generate Atlantis projects at module level")
+	generateCmd.PersistentFlags().BoolVar(&inferStacks, "infer-stacks", false, "Automatically infer stacks from directory structure")
+	generateCmd.PersistentFlags().IntVar(&stackDirectoryDepth, "stack-directory-depth", 2, "Directory depth for stack inference")
+	generateCmd.PersistentFlags().StringVar(&stackMarkerFile, "stack-marker-file", ".atlantis-stack", "Filename for stack marker files")
+	generateCmd.PersistentFlags().BoolVar(&validateStackCoverage, "validate-stack-coverage", false, "Ensure all modules are assigned to at least one stack")
+	generateCmd.PersistentFlags().BoolVar(&allowMultiStack, "allow-multi-stack", true, "Allow modules to belong to multiple stacks")
+	generateCmd.PersistentFlags().StringVar(&stackWorkspacePrefix, "stack-workspace-prefix", "", "Prefix for stack workspace names")
+}
+
+/*
+===================================================================================
+INTEGRATION POINT 3: Modify main() function to integrate stack logic
+===================================================================================
+*/
+
+func mainWithStacks(cmd *cobra.Command, args []string) error {
+	// Ensure the gitRoot has a trailing slash and is an absolute path
+	absoluteGitRoot, err := filepath.Abs(gitRoot)
+	if err != nil {
+		return err
+	}
+	gitRoot = absoluteGitRoot + string(filepath.Separator)
+	
+	// ... existing setup code ...
+	
+	// Read in the old config, if it already exists
+	oldConfig, err := readOldConfig()
+	if err != nil {
+		return err
+	}
+	
+	config := AtlantisConfig{
+		Version:       3,
+		AutoMerge:     autoMerge,
+		ParallelPlan:  parallel,
+		ParallelApply: parallel,
+	}
+	
+	if oldConfig != nil && preserveWorkflows {
+		config.Workflows = oldConfig.Workflows
+	}
+	if oldConfig != nil && preserveProjects {
+		config.Projects = oldConfig.Projects
+	}
+	
+	// Get all Terragrunt files
+	terragruntFiles, err := getAllTerragruntFiles(gitRoot)
+	if err != nil {
+		return err
+	}
+	
+	// ========================================================================
+	// NEW: Stack processing logic
+	// ========================================================================
+	if enableStacks {
+		log.Info("Stack support enabled")
+		
+		// Initialize stack manager
+		stackMgr := NewStackManager(StackManagerConfig{
+			GitRoot:          gitRoot,
+			DefinitionFile:   stackDefinitionFile,
+			InferFromDir:     inferStacks,
+			DirectoryDepth:   stackDirectoryDepth,
+			AllowMultiStack:  allowMultiStack,
+			StackMarkerFile:  stackMarkerFile,
+			ValidateCoverage: validateStackCoverage,
+		})
+		
+		// Discover all stacks
+		stacks, err := stackMgr.DiscoverStacks()
+		if err != nil {
+			return fmt.Errorf("failed to discover stacks: %w", err)
+		}
+		log.Infof("Discovered %d stack(s)", len(stacks))
+		
+		// Assign modules to stacks
+		stackAssignments, err := stackMgr.AssignModulesToStacks(terragruntFiles)
+		if err != nil {
+			return fmt.Errorf("failed to assign modules to stacks: %w", err)
+		}
+		
+		// Log assignment summary
+		for stackName, modules := range stackAssignments {
+			log.Infof("Stack '%s': %d module(s)", stackName, len(modules))
+		}
+		
+		// Validate coverage if requested
+		if validateStackCoverage {
+			if err := stackMgr.ValidateStackCoverage(terragruntFiles); err != nil {
+				return fmt.Errorf("stack coverage validation failed: %w", err)
+			}
+			log.Info("Stack coverage validation passed")
+		}
+		
+		// Generate stack-level projects
+		if stackLevelProjects {
+			log.Info("Generating stack-level projects")
+			for _, stack := range stacks {
+				project, err := stackMgr.GenerateStackProject(stack)
+				if err != nil {
+					return fmt.Errorf("failed to generate project for stack '%s': %w", stack.Name, err)
+				}
+				
+				// Apply workspace prefix if specified
+				if stackWorkspacePrefix != "" && project.Workspace != "" {
+					project.Workspace = stackWorkspacePrefix + project.Workspace
+				}
+				
+				config.Projects = append(config.Projects, *project)
+				log.Infof("Created stack-level project for '%s'", stack.Name)
+			}
+		}
+		
+		// Generate module-level projects with stack context
+		if moduleLevelProjects {
+			log.Info("Generating module-level projects")
+			
+			lock := sync.Mutex{}
+			ctx := context.Background()
+			errGroup, _ := errgroup.WithContext(ctx)
+			sem := semaphore.NewWeighted(numExecutors)
+			
+			for _, terragruntPath := range terragruntFiles {
+				terragruntPath := terragruntPath
+				
+				if err := sem.Acquire(ctx, 1); err != nil {
+					return err
+				}
+				
+				errGroup.Go(func() error {
+					defer sem.Release(1)
+					
+					// Create project with stack context
+					project, err := createProject(ctx, terragruntPath)
+					if err != nil {
+						return err
+					}
+					
+					// Skip if project is nil (parent module, skipped, etc.)
+					if project == nil {
+						return nil
+					}
+					
+					// Enhance project with stack information
+					stackNames := stackMgr.GetStackForModule(terragruntPath)
+					if len(stackNames) > 0 {
+						// Could add stack metadata here
+						// For now, just log it
+						log.Debugf("Module %s belongs to stack(s): %v", terragruntPath, stackNames)
+					}
+					
+					lock.Lock()
+					defer lock.Unlock()
+					
+					if preserveProjects {
+						updateProject := false
+						for i := range config.Projects {
+							if config.Projects[i].Dir == project.Dir {
+								updateProject = true
+								log.Info("Updated project for ", terragruntPath)
+								config.Projects[i] = *project
+								break
+							}
+						}
+						if !updateProject {
+							log.Info("Created project for ", terragruntPath)
+							config.Projects = append(config.Projects, *project)
+						}
+					} else {
+						log.Info("Created project for ", terragruntPath)
+						config.Projects = append(config.Projects, *project)
+					}
+					
+					return nil
+				})
+			}
+			
+			if err := errGroup.Wait(); err != nil {
+				return err
+			}
+		}
+		
+	} else {
+		// ========================================================================
+		// EXISTING: Original logic when stacks are disabled
+		// ========================================================================
+		log.Info("Stack support disabled, using traditional module-only mode")
+		
+		lock := sync.Mutex{}
+		ctx := context.Background()
+		errGroup, _ := errgroup.WithContext(ctx)
+		sem := semaphore.NewWeighted(numExecutors)
+		
+		for _, terragruntPath := range terragruntFiles {
+			terragruntPath := terragruntPath
+			
+			if err := sem.Acquire(ctx, 1); err != nil {
+				return err
+			}
+			
+			errGroup.Go(func() error {
+				defer sem.Release(1)
+				project, err := createProject(ctx, terragruntPath)
+				if err != nil {
+					return err
+				}
+				if err == nil && project == nil {
+					return nil
+				}
+				
+				lock.Lock()
+				defer lock.Unlock()
+				
+				if preserveProjects {
+					updateProject := false
+					for i := range config.Projects {
+						if config.Projects[i].Dir == project.Dir {
+							updateProject = true
+							log.Info("Updated project for ", terragruntPath)
+							config.Projects[i] = *project
+							break
+						}
+					}
+					if !updateProject {
+						log.Info("Created project for ", terragruntPath)
+						config.Projects = append(config.Projects, *project)
+					}
+				} else {
+					log.Info("Created project for ", terragruntPath)
+					config.Projects = append(config.Projects, *project)
+				}
+				
+				return nil
+			})
+		}
+		
+		if err := errGroup.Wait(); err != nil {
+			return err
+		}
+	}
+	
+	// ========================================================================
+	// Continue with existing logic (sorting, execution order, output)
+	// ========================================================================
+	
+	// Sort the projects in config by Dir
+	sort.Slice(config.Projects, func(i, j int) bool { 
+		return config.Projects[i].Dir < config.Projects[j].Dir 
+	})
+	
+	// ... rest of existing logic for execution_order_groups and depends_on ...
+	
+	if executionOrderGroups || dependsOn {
+		// ... existing execution order logic ...
+	}
+	
+	// Convert config to YAML string
+	yamlBytes, err := yaml.Marshal(&config)
+	if err != nil {
+		return err
+	}
+	
+	// ... existing output logic ...
+	
+	return nil
+}
+
+/*
+===================================================================================
+INTEGRATION POINT 4: Example usage commands
+===================================================================================
+*/
+
+/*
+# Basic stack usage (external file)
+terragrunt-atlantis-config generate \
+  --enable-stacks \
+  --stack-definition-file atlantis-stacks.yaml \
+  --output atlantis.yaml
+
+# Stack-level projects only
+terragrunt-atlantis-config generate \
+  --enable-stacks \
+  --stack-definition-file atlantis-stacks.yaml \
+  --stack-level-projects \
+  --no-module-level-projects \
+  --output atlantis.yaml
+
+# Both stack and module projects
+terragrunt-atlantis-config generate \
+  --enable-stacks \
+  --stack-definition-file atlantis-stacks.yaml \
+  --stack-level-projects \
+  --module-level-projects \
+  --output atlantis.yaml
+
+# Inferred stacks
+terragrunt-atlantis-config generate \
+  --enable-stacks \
+  --infer-stacks \
+  --stack-directory-depth 2 \
+  --output atlantis.yaml
+
+# With validation
+terragrunt-atlantis-config generate \
+  --enable-stacks \
+  --stack-definition-file atlantis-stacks.yaml \
+  --validate-stack-coverage \
+  --output atlantis.yaml
+
+# Full featured
+terragrunt-atlantis-config generate \
+  --enable-stacks \
+  --stack-definition-file atlantis-stacks.yaml \
+  --stack-level-projects \
+  --module-level-projects \
+  --validate-stack-coverage \
+  --stack-workspace-prefix "stack-" \
+  --autoplan \
+  --parallel \
+  --create-workspace \
+  --output atlantis.yaml
+*/
+
+

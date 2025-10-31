@@ -1,0 +1,25 @@
+version: 1
+stacks:
+  - name: stack-a
+    description: First example stack
+    modules:
+      - app-a
+      - app-b
+    atlantis:
+      workflow: default
+      autoplan: true
+      parallel: true
+      execution_order_group: 1
+  
+  - name: stack-b
+    description: Second example stack with dependency
+    modules:
+      - app-c
+    depends_on:
+      - stack-a
+    atlantis:
+      workflow: default
+      autoplan: true
+      execution_order_group: 2
+
+

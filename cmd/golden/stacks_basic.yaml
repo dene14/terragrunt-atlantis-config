@@ -1,0 +1,34 @@
+automerge: false
+parallel_apply: true
+parallel_plan: true
+projects:
+- autoplan:
+    enabled: true
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - '**/*.hcl'
+    - '**/*.tf*'
+  dir: test_examples/stacks_basic/app-a
+  execution_order_group: 1
+  name: stack-a
+  workspace: stack-a
+  workflow: default
+- autoplan:
+    enabled: true
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - '**/*.hcl'
+    - '**/*.tf*'
+    - test_examples/stacks_basic/app-a
+  depends_on:
+  - stack-a
+  dir: test_examples/stacks_basic/app-c
+  execution_order_group: 2
+  name: stack-b
+  workspace: stack-b
+  workflow: default
+version: 3
+
+
