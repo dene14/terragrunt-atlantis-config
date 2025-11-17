@@ -14,7 +14,7 @@ jobs:
       # Install golang
       - uses: actions/setup-go@v5
         with:
-          go-version: "^1.23"
+          go-version: "^1.25"
 
       # Checkout code
       - uses: actions/checkout@v4
@@ -23,18 +23,23 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/go/pkg/mod
-          key: ubuntu-latest-1.23-go-${{ hashFiles('**/go.sum') }}
+          key: ubuntu-latest-1.25-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            ubuntu-latest-1.23-go-
+            ubuntu-latest-1.25-go-
 
-      # build binaries for all supported environments
-      - run: sudo apt update && sudo apt install -y make
-      - run: make build-all
-
-      # Create the binary checksums
+      # Get the version from the tag
       - name: Get the version
         id: get_version
         run: echo VERSION=${GITHUB_REF#refs/tags/v} >> $GITHUB_OUTPUT
+
+      # build binaries for all supported environments
+      - run: sudo apt update && sudo apt install -y make
+      - name: Build binaries
+        run: make build-all
+        env:
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
+
+      # Create the binary checksums
       - name: Create checksums
         run: |
           readonly BUILD_DIR="build/${{ steps.get_version.outputs.VERSION }}"

@@ -31,5 +31,5 @@ jobs:
           commit-message: "[Chore] Update Contributors SVG"
           title: "[Chore] Update Contributors SVG"
           delete-branch: true
-          assignees: dmattia
-          reviewers: dmattia
+          assignees: dene14
+          reviewers: dene14
