@@ -6,7 +6,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-        golang-version: ["1.23"]
+        golang-version: ["1.25.4"]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -14,11 +14,15 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "^${{ matrix.golang-version }}"
+      - name: Clear Go module cache
+        run: go clean -modcache || true
       - uses: actions/cache@v4
         with:
           path: ~/go/pkg/mod
           key: ${{ matrix.os }}-${{ matrix.golang-version }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ matrix.os }}-${{ matrix.golang-version }}-go-
+      - name: Download dependencies
+        run: go mod download
       - run: mkdir cmd/test_artifacts
       - run: go test -v -cover ./...
