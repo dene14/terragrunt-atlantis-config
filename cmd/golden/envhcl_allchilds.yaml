@@ -882,6 +882,13 @@ projects:
     when_modified:
     - '*.hcl'
     - '*.tf*'
+  dir: values_sidecar
+  workflow: values-staging
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
     - ../terragrunt.hcl
     - ../common/terragrunt.hcl
     - ../dependency/terragrunt.hcl
