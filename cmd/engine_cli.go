@@ -350,13 +350,19 @@ func cliEngineProjects(components []cliComponent, root string) ([]AtlantisProjec
 			workflow = stackWorkflow
 		}
 
+		// Sort for deterministic output: terragrunt's discovery order depends
+		// on the filesystem walk, which differs between OSes. A generator must
+		// emit byte-stable atlantis.yaml for a given commit.
+		sortedWatch := uniqueStrings(watch)
+		sort.Strings(sortedWatch)
+
 		project := AtlantisProject{
 			Dir:              dir,
 			Workflow:         workflow,
 			TerraformVersion: defaultTerraformVersion,
 			Autoplan: AutoplanConfig{
 				Enabled:      autoPlan,
-				WhenModified: uniqueStrings(watch),
+				WhenModified: sortedWatch,
 			},
 		}
 

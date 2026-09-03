@@ -21,10 +21,10 @@ projects:
     when_modified:
     - '*.hcl'
     - '*.tf*'
-    - ../depender/**/*.hcl
-    - ../depender/**/*.tf*
     - ../dependency/**/*.hcl
     - ../dependency/**/*.tf*
+    - ../depender/**/*.hcl
+    - ../depender/**/*.tf*
     - nested/**/*.hcl
     - nested/**/*.tf*
   dir: depender_on_depender

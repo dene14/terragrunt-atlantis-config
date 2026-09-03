@@ -13,10 +13,10 @@ projects:
 - autoplan:
     enabled: false
     when_modified:
-    - '*.hcl'
-    - '*.tf*'
     - '**/*.hcl'
     - '**/*.tf*'
+    - '*.hcl'
+    - '*.tf*'
     - ../db/**/*.hcl
     - ../db/**/*.tf*
   dir: catalog/mini-stack
@@ -29,13 +29,13 @@ projects:
 - autoplan:
     enabled: false
     when_modified:
-    - '*.hcl'
-    - '*.tf*'
     - '**/*.hcl'
     - '**/*.tf*'
-    - ../../catalog/vpc/**/*.hcl
-    - ../../catalog/vpc/**/*.tf*
+    - '*.hcl'
+    - '*.tf*'
     - ../../catalog/mini-stack/**/*.hcl
     - ../../catalog/mini-stack/**/*.tf*
+    - ../../catalog/vpc/**/*.hcl
+    - ../../catalog/vpc/**/*.tf*
   dir: live/prod
 version: 3
