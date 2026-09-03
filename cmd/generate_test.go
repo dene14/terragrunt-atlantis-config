@@ -834,14 +834,18 @@ func TestWorkflowOrderPreservedVerbatim(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	text := string(first)
+	// On Windows the generator CRLF-ifies its output; normalize before
+	// comparing so the assertions describe content, not line endings.
+	norm := func(s string) string { return strings.ReplaceAll(s, "\r\n", "\n") }
+
+	text := norm(string(first))
 	if !strings.Contains(text, "# a comment that must survive") {
 		t.Errorf("comment lost while preserving workflows:\n%s", text)
 	}
 	if strings.Index(text, "zzz_custom") > strings.Index(text, "aaa_custom") {
 		t.Errorf("workflow order changed:\n%s", text)
 	}
-	if !strings.HasSuffix(text, strings.TrimSpace(string(contents))+"\n") && !strings.Contains(text, string(contents)) {
+	if !strings.Contains(text, norm(string(contents))) {
 		t.Errorf("workflows section not preserved verbatim:\n%s", text)
 	}
 
@@ -852,7 +856,7 @@ func TestWorkflowOrderPreservedVerbatim(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(first) != string(second) {
+	if norm(string(first)) != norm(string(second)) {
 		t.Errorf("second run mutated the file:\nfirst:\n%s\nsecond:\n%s", first, second)
 	}
 }
