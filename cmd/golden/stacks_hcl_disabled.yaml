@@ -1,0 +1,19 @@
+automerge: false
+parallel_apply: true
+parallel_plan: true
+projects:
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - ../vpc/terragrunt.hcl
+    - ../vpc/*.tf*
+  dir: units/app
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+  dir: units/vpc
+version: 3

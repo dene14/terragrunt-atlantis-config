@@ -1,0 +1,20 @@
+automerge: false
+parallel_apply: true
+parallel_plan: true
+projects:
+- autoplan:
+    enabled: true
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - '**/*.hcl'
+    - '**/*.tf*'
+    - ../../units/vpc/**/*.hcl
+    - ../../units/vpc/**/*.tf*
+    - ../../units/app/**/*.hcl
+    - ../../units/app/**/*.tf*
+  dir: live/prod
+  name: live_prod
+  workflow: terragrunt-stack
+  workspace: live_prod
+version: 3

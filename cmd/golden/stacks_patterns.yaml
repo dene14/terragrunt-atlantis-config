@@ -1,0 +1,47 @@
+automerge: false
+parallel_apply: true
+parallel_plan: true
+projects:
+- apply_requirements:
+  - approved
+  - mergeable
+  autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - '**/*.hcl'
+    - '**/*.tf*'
+  dir: environments/production/app
+  execution_order_group: 100
+  name: production-environment
+  workflow: production
+- autoplan:
+    enabled: true
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - '**/*.hcl'
+    - '**/*.tf*'
+    - ../../../shared/vpc/**/*.hcl
+    - ../../../shared/vpc/**/*.tf*
+  depends_on:
+  - shared-infrastructure
+  dir: environments/staging/app
+  execution_order_group: 50
+  name: staging-environment
+  workflow: staging
+- apply_requirements:
+  - approved
+  autoplan:
+    enabled: true
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - '**/*.hcl'
+    - '**/*.tf*'
+  dir: shared/vpc
+  execution_order_group: 1
+  name: shared-infrastructure
+  workflow: shared
+version: 3

@@ -46,6 +46,9 @@ func resetForRun() error {
 	useProjectMarkers = false
 	executionOrderGroups = false
 	dependsOn = false
+	enableStacks = false
+	stackWorkflow = ""
+	stackDefinitionFile = ""
 
 	return nil
 }
@@ -58,8 +61,15 @@ func runTest(t *testing.T, goldenFile string, args []string) {
 		return
 	}
 
+	// Ensure test_artifacts directory exists
+	testArtifactsDir := "test_artifacts"
+	if err := os.MkdirAll(testArtifactsDir, 0755); err != nil {
+		t.Errorf("Failed to create test_artifacts directory: %v", err)
+		return
+	}
+
 	randomInt := rand.Int()
-	filename := filepath.Join("test_artifacts", fmt.Sprintf("%d.yaml", randomInt))
+	filename := filepath.Join(testArtifactsDir, fmt.Sprintf("%d.yaml", randomInt))
 	defer os.Remove(filename)
 
 	allArgs := append([]string{
@@ -181,13 +191,11 @@ func TestNonStringErrorOnExtraDeclaredDependencies(t *testing.T) {
 		filepath.Join("..", "test_examples_errors", "extra_dependency_error"),
 	})
 	err = rootCmd.Execute()
-	
+
 	expectedError := "extra_atlantis_dependencies contains non-string value at position 4"
 	if err == nil || err.Error() != expectedError {
 		t.Errorf("Expected error '%s', got '%v'", expectedError, err)
-		return
 	}
-	return
 }
 
 func TestLocalTerraformModuleSource(t *testing.T) {
@@ -687,5 +695,98 @@ func TestOpenTofuProviderSyntax(t *testing.T) {
 	runTest(t, filepath.Join("golden", "opentofu_provider_syntax.yaml"), []string{
 		"--root",
 		filepath.Join("..", "test_examples", "opentofu_provider_syntax"),
+	})
+}
+
+func TestStacksHclExample(t *testing.T) {
+	runTest(t, filepath.Join("golden", "stacks_hcl.yaml"), []string{
+		"--root",
+		filepath.Join("..", "test_examples", "stacks_hcl_example"),
+		"--enable-stacks",
+	})
+}
+
+func TestStacksHclExampleWithAllFlags(t *testing.T) {
+	runTest(t, filepath.Join("golden", "stacks_hcl_all_flags.yaml"), []string{
+		"--root",
+		filepath.Join("..", "test_examples", "stacks_hcl_example"),
+		"--enable-stacks",
+		"--autoplan",
+		"--create-project-name",
+		"--create-workspace",
+		"--stack-workflow",
+		"terragrunt-stack",
+	})
+}
+
+// Terragrunt stack files must be ignored when stacks support is disabled
+func TestStacksHclExampleWithoutStacksFlag(t *testing.T) {
+	runTest(t, filepath.Join("golden", "stacks_hcl_disabled.yaml"), []string{
+		"--root",
+		filepath.Join("..", "test_examples", "stacks_hcl_example"),
+	})
+}
+
+func TestStacksLocalUnits(t *testing.T) {
+	runTest(t, filepath.Join("golden", "stacks_local_units.yaml"), []string{
+		"--root",
+		filepath.Join("..", "test_examples", "stacks_local_units"),
+		"--enable-stacks",
+	})
+}
+
+// Stack member units must get regular projects when stacks support is disabled
+func TestStacksLocalUnitsWithoutStacksFlag(t *testing.T) {
+	runTest(t, filepath.Join("golden", "stacks_local_units_disabled.yaml"), []string{
+		"--root",
+		filepath.Join("..", "test_examples", "stacks_local_units"),
+	})
+}
+
+func TestStacksBasicFromDefinitionFile(t *testing.T) {
+	runTest(t, filepath.Join("golden", "stacks_basic.yaml"), []string{
+		"--root",
+		filepath.Join("..", "test_examples", "stacks_basic"),
+		"--enable-stacks",
+		"--stack-definition-file",
+		"atlantis-stacks.yaml",
+		"--create-project-name",
+	})
+}
+
+// The definition file must not be picked up when stacks support is disabled
+func TestStacksBasicDefinitionFileIgnoredWithoutStacksFlag(t *testing.T) {
+	runTest(t, filepath.Join("golden", "stacks_basic_disabled.yaml"), []string{
+		"--root",
+		filepath.Join("..", "test_examples", "stacks_basic"),
+	})
+}
+
+func TestStacksWithPatterns(t *testing.T) {
+	runTest(t, filepath.Join("golden", "stacks_patterns.yaml"), []string{
+		"--root",
+		filepath.Join("..", "test_examples", "stacks_with_patterns"),
+		"--enable-stacks",
+		"--stack-definition-file",
+		"atlantis-stacks.yaml",
+		"--create-project-name",
+	})
+}
+
+func TestStacksWithNestedStacksAndUnits(t *testing.T) {
+	runTest(t, filepath.Join("golden", "stacks_nested.yaml"), []string{
+		"--root",
+		filepath.Join("..", "test_examples", "stacks_nested"),
+		"--enable-stacks",
+		"--create-project-name",
+	})
+}
+
+// Nested stack files are ignored without the flag (catalog units getting
+// plain projects in that mode matches public repo behavior).
+func TestStacksNestedWithoutStacksFlag(t *testing.T) {
+	runTest(t, filepath.Join("golden", "stacks_nested_disabled.yaml"), []string{
+		"--root",
+		filepath.Join("..", "test_examples", "stacks_nested"),
 	})
 }

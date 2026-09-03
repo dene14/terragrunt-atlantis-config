@@ -1,0 +1,39 @@
+version: 1
+stacks:
+  - name: production-environment
+    description: All production infrastructure
+    include:
+      - "environments/production/**"
+    exclude:
+      - "environments/production/experimental/**"
+    atlantis:
+      workflow: production
+      autoplan: false
+      apply_requirements:
+        - approved
+        - mergeable
+      execution_order_group: 100
+  
+  - name: staging-environment
+    description: All staging infrastructure
+    include:
+      - "environments/staging/**"
+    depends_on:
+      - shared-infrastructure
+    atlantis:
+      workflow: staging
+      autoplan: true
+      execution_order_group: 50
+  
+  - name: shared-infrastructure
+    description: Shared resources across all environments
+    include:
+      - "shared/**"
+    atlantis:
+      workflow: shared
+      autoplan: true
+      apply_requirements:
+        - approved
+      execution_order_group: 1
+
+

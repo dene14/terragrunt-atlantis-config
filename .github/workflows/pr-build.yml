@@ -1,0 +1,180 @@
+name: Build PR Binary
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  build-binary:
+    name: Build Latest Binary
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        go-version: ["1.25.4"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "^${{ matrix.go-version }}"
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ matrix.os }}-${{ matrix.go-version }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ matrix.os }}-${{ matrix.go-version }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Get PR number and commit SHA
+        id: pr_info
+        run: |
+          PR_NUM="${{ github.event.pull_request.number }}"
+          COMMIT_SHA="${{ github.event.pull_request.head.sha }}"
+          SHORT_SHA=$(echo "$COMMIT_SHA" | cut -c1-7)
+          VERSION="pr${PR_NUM}-${SHORT_SHA}"
+          echo "pr_number=${PR_NUM}" >> $GITHUB_OUTPUT
+          echo "commit_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
+
+      - name: Install make
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y make
+
+      - name: Build binary
+        run: make build
+        env:
+          VERSION: ${{ steps.pr_info.outputs.version }}
+
+      - name: Get OS and Arch
+        id: os_arch
+        run: |
+          OS=$(go env GOOS)
+          ARCH=$(go env GOARCH)
+          echo "os=$OS" >> $GITHUB_OUTPUT
+          echo "arch=$ARCH" >> $GITHUB_OUTPUT
+          echo "OS: $OS, Arch: $ARCH"
+
+      - name: Create latest symlink/copy
+        run: |
+          BUILD_DIR="build/${{ steps.pr_info.outputs.version }}"
+          BINARY_NAME="terragrunt-atlantis-config_${{ steps.pr_info.outputs.version }}_${{ steps.os_arch.outputs.os }}_${{ steps.os_arch.outputs.arch }}"
+          LATEST_NAME="terragrunt-atlantis-config_latest_${{ steps.os_arch.outputs.os }}_${{ steps.os_arch.outputs.arch }}"
+          
+          # Verify build directory and binary exist
+          if [ ! -d "$BUILD_DIR" ]; then
+            echo "Error: Build directory $BUILD_DIR does not exist"
+            exit 1
+          fi
+          
+          if [ ! -f "$BUILD_DIR/$BINARY_NAME" ]; then
+            echo "Error: Binary $BUILD_DIR/$BINARY_NAME does not exist"
+            ls -la "$BUILD_DIR/" || true
+            exit 1
+          fi
+          
+          # Copy binary with latest name
+          cp "$BUILD_DIR/$BINARY_NAME" "$BUILD_DIR/$LATEST_NAME"
+          
+          # Also create a simple 'latest' name without arch for convenience
+          cp "$BUILD_DIR/$BINARY_NAME" "$BUILD_DIR/terragrunt-atlantis-config_latest"
+          
+          echo "Binary built: $BUILD_DIR/$BINARY_NAME"
+          echo "Latest binary: $BUILD_DIR/$LATEST_NAME"
+          ls -lh "$BUILD_DIR/"
+
+      - name: Create checksum
+        run: |
+          BUILD_DIR="build/${{ steps.pr_info.outputs.version }}"
+          cd "$BUILD_DIR"
+          sha256sum terragrunt-atlantis-config_latest* > checksums.txt || true
+          cat checksums.txt
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terragrunt-atlantis-config-latest-${{ matrix.os }}
+          path: |
+            build/${{ steps.pr_info.outputs.version }}/terragrunt-atlantis-config_latest*
+            build/${{ steps.pr_info.outputs.version }}/checksums.txt
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Comment PR with download link
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const artifactUrl = `https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            const osArch = `${{ steps.os_arch.outputs.os }}_${{ steps.os_arch.outputs.arch }}`;
+            const downloadText = `## 📦 Latest Binary Available
+            
+            A binary has been built for this PR and is available for download:
+            
+            **Download:** [View workflow run](${artifactUrl}) → Artifacts section
+            
+            **Binary name:** \`terragrunt-atlantis-config_latest_${osArch}\`
+            
+            **PR:** #${{ github.event.pull_request.number }}
+            **Commit:** \`${{ steps.pr_info.outputs.commit_sha }}\`
+            
+            > Note: Artifacts are available for 7 days after the workflow run completes.`;
+            
+            try {
+              // Check if comment already exists
+              const comments = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+              });
+              
+              const existingComment = comments.data.find(comment => 
+                comment.user.type === 'Bot' && 
+                comment.body.includes('📦 Latest Binary Available')
+              );
+              
+              if (existingComment) {
+                // Update existing comment
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existingComment.id,
+                  body: downloadText
+                });
+                console.log('Updated existing comment');
+              } else {
+                // Create new comment
+                await github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: downloadText
+                });
+                console.log('Created new comment');
+              }
+            } catch (error) {
+              console.error('Error commenting on PR:', error.message);
+              console.error('This is non-fatal - the binary was built successfully');
+              // Don't fail the workflow if commenting fails
+              // The binary is still available in the artifacts
+            }
+
