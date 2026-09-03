@@ -1,0 +1,41 @@
+automerge: false
+parallel_apply: true
+parallel_plan: true
+projects:
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - ../vpc/**/*.hcl
+    - ../vpc/**/*.tf*
+  dir: catalog/db
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - '**/*.hcl'
+    - '**/*.tf*'
+    - ../db/**/*.hcl
+    - ../db/**/*.tf*
+  dir: catalog/mini-stack
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+  dir: catalog/vpc
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - '**/*.hcl'
+    - '**/*.tf*'
+    - ../../catalog/vpc/**/*.hcl
+    - ../../catalog/vpc/**/*.tf*
+    - ../../catalog/mini-stack/**/*.hcl
+    - ../../catalog/mini-stack/**/*.tf*
+  dir: live/prod
+version: 3

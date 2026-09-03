@@ -49,6 +49,7 @@ func resetForRun() error {
 	enableStacks = false
 	stackWorkflow = ""
 	stackDefinitionFile = ""
+	engine = engineAuto
 
 	return nil
 }

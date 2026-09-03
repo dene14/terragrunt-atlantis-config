@@ -24,5 +24,25 @@ jobs:
             ${{ matrix.os }}-${{ matrix.golang-version }}-go-
       - name: Download dependencies
         run: go mod download
+      - name: Install terragrunt (CLI engine tests)
+        shell: bash
+        env:
+          TG_VERSION: v1.1.4
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            asset=terragrunt_windows_amd64.exe
+            sha=d540fcac8a841f34053229d78aa7025c6ea6b6724568b0610f4748a87c75c929
+            bin=terragrunt.exe
+          else
+            asset=terragrunt_linux_amd64
+            sha=a2640da8455fa5f3671167e6373832b0907b9dc972dd01c2093cc7808934e158
+            bin=terragrunt
+          fi
+          mkdir -p "$RUNNER_TEMP/tgbin"
+          curl -sSfL "https://github.com/gruntwork-io/terragrunt/releases/download/${TG_VERSION}/${asset}" -o "$RUNNER_TEMP/tgbin/$bin"
+          echo "$sha  $RUNNER_TEMP/tgbin/$bin" | sha256sum -c
+          chmod +x "$RUNNER_TEMP/tgbin/$bin" || true
+          echo "$RUNNER_TEMP/tgbin" >> "$GITHUB_PATH"
       - name: Run tests
         run: go test -v -cover ./...
