@@ -1,0 +1,47 @@
+automerge: false
+parallel_apply: true
+parallel_plan: true
+projects:
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+  dir: dependency
+  name: dependency
+  workspace: dependency
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - ../dependency/**/*.hcl
+    - ../dependency/**/*.tf*
+  dir: depender
+  name: depender
+  workspace: depender
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - ../dependency/**/*.hcl
+    - ../dependency/**/*.tf*
+    - ../depender/**/*.hcl
+    - ../depender/**/*.tf*
+    - nested/**/*.hcl
+    - nested/**/*.tf*
+  dir: depender_on_depender
+  name: depender_on_depender
+  workspace: depender_on_depender
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - ../../dependency/**/*.hcl
+    - ../../dependency/**/*.tf*
+  dir: depender_on_depender/nested
+  name: depender_on_depender_nested
+  workspace: depender_on_depender_nested
+version: 3

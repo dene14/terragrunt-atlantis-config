@@ -49,6 +49,9 @@ func resetForRun() error {
 	enableStacks = false
 	stackWorkflow = ""
 	stackDefinitionFile = ""
+	// Tests assert library-engine goldens; engine selection must not depend
+	// on whether a terragrunt binary happens to be on PATH.
+	engine = engineLibrary
 
 	return nil
 }

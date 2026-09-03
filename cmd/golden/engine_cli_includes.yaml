@@ -1,0 +1,35 @@
+automerge: false
+parallel_apply: true
+parallel_plan: true
+projects:
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - ../use_terraform_12_parent.hcl
+    - ../use_terraform_13_parent.hcl
+  dir: includes_tf_12_then_13
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - ../use_terraform_12_parent.hcl
+    - ../use_terraform_13_parent.hcl
+  dir: includes_tf_13_then_12
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - ../use_terraform_12_parent.hcl
+  dir: uses_terraform_12
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - ../use_terraform_13_parent.hcl
+  dir: uses_terraform_13
+version: 3
