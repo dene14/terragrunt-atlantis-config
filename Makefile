@@ -12,6 +12,10 @@ clean:
 	rm -rf ./build
 	rm -rf "$(HOME)/.local/bin/$(FILE_COMMAND)"
 
+# -s -w strips the symbol table and DWARF debug info: ~30% smaller release
+# binaries with zero functional impact for a CLI tool.
+LDFLAGS=-s -w -X main.VERSION=$(VERSION)
+
 .PHONY: build
 build: clean
 	CGO_ENABLED=0 \
@@ -19,7 +23,7 @@ build: clean
 	-trimpath \
 	-mod=readonly \
 	-modcacherw \
-	-ldflags "-X main.VERSION=$(VERSION)" \
+	-ldflags "$(LDFLAGS)" \
 	-o $(PATH_BUILD)$(VERSION)/$(FILE_COMMAND)_$(VERSION)_$(FILE_ARCH)
 
 .PHONY: build-all
@@ -35,7 +39,7 @@ build-all: clean
 			-trimpath \
 			-mod=readonly \
 			-modcacherw \
-			-ldflags "-X main.VERSION=$(VERSION)" \
+			-ldflags "$(LDFLAGS)" \
 			-o $(PATH_BUILD)$(VERSION)/$(FILE_COMMAND)_$(VERSION)_$${os}_$${arch}$${ext} ; \
 		done \
 	done
