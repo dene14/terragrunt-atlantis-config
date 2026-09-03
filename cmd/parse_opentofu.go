@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/gruntwork-io/terragrunt/util"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/terraform-config-inspect/tfconfig"
 )
@@ -111,8 +110,8 @@ func parseTerraformLocalModuleSourceOpenTofu(path string) ([]string, error) {
 	var sourceMap = map[string]bool{}
 	for _, mc := range module.ModuleCalls {
 		if isLocalTerraformModuleSource(mc.Source) {
-			modulePath := util.JoinPath(path, mc.Source)
-			modulePathGlob := util.JoinPath(modulePath, "*.tf*")
+			modulePath := joinPath(path, mc.Source)
+			modulePathGlob := joinPath(modulePath, "*.tf*")
 
 			if _, exists := sourceMap[modulePathGlob]; exists {
 				continue

@@ -6,8 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gruntwork-io/terragrunt/config"
-	"github.com/gruntwork-io/terragrunt/options"
+	"github.com/gruntwork-io/terragrunt/pkg/options"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -40,7 +39,7 @@ stack "production" {
 
 	// Create parsing context
 	terragruntOptions := options.NewTerragruntOptions()
-	ctx := config.NewParsingContext(context.Background(), terragruntOptions)
+	ctx := newParsingContext(context.Background(), terragruntOptions)
 
 	// Parse the stack file
 	result, err := ParseStackHclFile(stackFile, ctx, tmpDir)
@@ -93,7 +92,7 @@ stack "production" {
 
 	// Parse the stack file
 	terragruntOptions := options.NewTerragruntOptions()
-	ctx := config.NewParsingContext(context.Background(), terragruntOptions)
+	ctx := newParsingContext(context.Background(), terragruntOptions)
 
 	def, err := ParseStackHclFile(stackFile, ctx, tmpDir)
 	require.NoError(t, err)
@@ -132,7 +131,7 @@ unit "db" {
 	require.NoError(t, os.WriteFile(stackFile, []byte(content), 0644))
 
 	terragruntOptions := options.NewTerragruntOptions()
-	ctx := config.NewParsingContext(context.Background(), terragruntOptions)
+	ctx := newParsingContext(context.Background(), terragruntOptions)
 
 	result, err := ParseStackHclFile(stackFile, ctx, tmpDir)
 	require.NoError(t, err)
@@ -169,7 +168,7 @@ unit "app" {
 	require.NoError(t, os.WriteFile(stackFile, []byte(content), 0644))
 
 	terragruntOptions := options.NewTerragruntOptions()
-	ctx := config.NewParsingContext(context.Background(), terragruntOptions)
+	ctx := newParsingContext(context.Background(), terragruntOptions)
 
 	def, err := ParseStackHclFile(stackFile, ctx, tmpDir)
 	require.NoError(t, err)
@@ -206,7 +205,7 @@ unit "app" {
 	require.NoError(t, os.WriteFile(stackFile, []byte(content), 0644))
 
 	terragruntOptions := options.NewTerragruntOptions()
-	ctx := config.NewParsingContext(context.Background(), terragruntOptions)
+	ctx := newParsingContext(context.Background(), terragruntOptions)
 
 	result, err := ParseStackHclFile(stackFile, ctx, tmpDir)
 	require.NoError(t, err)
@@ -332,7 +331,7 @@ dependency "shared" {
 	require.NoError(t, os.WriteFile(filepath.Join(root, "shared", "terragrunt.hcl"), []byte(`terraform { source = "." }`), 0644))
 
 	terragruntOptions := options.NewTerragruntOptions()
-	ctx := config.NewParsingContext(context.Background(), terragruntOptions)
+	ctx := newParsingContext(context.Background(), terragruntOptions)
 	def, err := ParseStackHclFile(stackFile, ctx, root)
 	require.NoError(t, err)
 

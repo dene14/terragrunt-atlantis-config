@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/gruntwork-io/go-commons/errors"
-	"github.com/gruntwork-io/terragrunt/config"
-	"github.com/gruntwork-io/terragrunt/config/hclparse"
-	"github.com/gruntwork-io/terragrunt/options"
+	"github.com/gruntwork-io/terragrunt/pkg/config"
+	"github.com/gruntwork-io/terragrunt/pkg/config/hclparse"
+	"github.com/gruntwork-io/terragrunt/pkg/options"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	log "github.com/sirupsen/logrus"
@@ -103,8 +103,8 @@ func parseAnchoredUnitConfig(sourceFile, anchorFile, gitRoot string, seen map[st
 	if optsErr == nil {
 		terragruntOptions.OriginalTerragruntConfigPath = anchorFile
 		terragruntOptions.Env = getEnvs()
-		ctx := config.NewParsingContext(context.Background(), terragruntOptions)
-		evalContext, err = createTerragruntEvalContext(ctx, anchorFile)
+		ctx := newParsingContext(context.Background(), terragruntOptions)
+		evalContext, err = createTerragruntEvalContext(context.Background(), ctx, quietTerragruntLogger(), anchorFile)
 		if err != nil {
 			log.Debugf("Failed to create eval context for %s: %v", sourceFile, err)
 			evalContext = nil
@@ -242,7 +242,7 @@ func ParseStackHclFile(path string, ctx *config.ParsingContext, gitRoot string) 
 	evaluated := false
 
 	// Try decoding with a full Terragrunt evaluation context first
-	evalContext, evalCtxErr := createTerragruntEvalContext(ctx, path)
+	evalContext, evalCtxErr := createTerragruntEvalContext(context.Background(), ctx, quietTerragruntLogger(), path)
 	if evalCtxErr == nil {
 		overrideRepoRootFunctions(evalContext, gitRoot, filepath.Dir(path))
 		decodeDiagnostics := gohcl.DecodeBody(file.Body, evalContext, &parsed)
@@ -606,7 +606,7 @@ func EnrichStackWithUnitDetails(stack *Stack, def StackHclDefinition, gitRoot st
 				continue
 			}
 			depOpts.Env = getEnvs()
-			depCtx := config.NewParsingContext(context.Background(), depOpts)
+			depCtx := newParsingContext(context.Background(), depOpts)
 			cascaded, err := safeGetDependencies(depCtx, depFile)
 			if err != nil {
 				log.Debugf("Failed to cascade stack dependency %s: %v", depFile, err)

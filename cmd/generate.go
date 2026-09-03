@@ -4,14 +4,12 @@ import (
 	"regexp"
 	"sort"
 
-	"github.com/gruntwork-io/terragrunt/util"
-
 	"github.com/hashicorp/go-getter"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/ghodss/yaml"
-	"github.com/gruntwork-io/terragrunt/config"
-	"github.com/gruntwork-io/terragrunt/options"
+	"github.com/gruntwork-io/terragrunt/pkg/config"
+	"github.com/gruntwork-io/terragrunt/pkg/options"
 	"github.com/spf13/cobra"
 
 	"golang.org/x/sync/errgroup"
@@ -158,13 +156,13 @@ func getDependencies(ctx *config.ParsingContext, path string) ([]string, error) 
 		}
 
 		// Parse the HCL file
-		parseCtx := config.NewParsingContext(ctx, ctx.TerragruntOptions).
+		parseCtx := newParsingContext(context.Background(), ctx.TerragruntOptions).
 			WithDecodeList(
 				config.DependencyBlock,
 				config.DependenciesBlock,
 				config.TerraformBlock,
 			)
-		parsedConfig, err := config.PartialParseConfigFile(parseCtx, path, nil)
+		parsedConfig, err := config.PartialParseConfigFile(context.Background(), parseCtx, quietTerragruntLogger(), path, nil)
 		if err != nil {
 			getDependenciesCache.set(path, getDependenciesOutput{nil, err})
 			return nil, err
@@ -269,7 +267,7 @@ func getDependencies(ctx *config.ParsingContext, path string) ([]string, error) 
 			terrOpts, _ := options.NewTerragruntOptionsWithConfigPath(depPath)
 			terrOpts.OriginalTerragruntConfigPath = ctx.TerragruntOptions.OriginalTerragruntConfigPath
 			terrOpts.Env = ctx.TerragruntOptions.Env
-			terrContext := config.NewParsingContext(ctx, terrOpts)
+			terrContext := newParsingContext(context.Background(), terrOpts)
 			childDeps, err := getDependencies(terrContext, depPath)
 			if err != nil {
 				continue
@@ -335,7 +333,7 @@ func createProject(ctx context.Context, sourcePath string) (*AtlantisProject, er
 	options.OriginalTerragruntConfigPath = sourcePath
 	options.Env = getEnvs()
 
-	parsingContext := config.NewParsingContext(ctx, options)
+	parsingContext := newParsingContext(ctx, options)
 	dependencies, err := getDependencies(parsingContext, sourcePath)
 	if err != nil {
 		return nil, err
@@ -452,7 +450,7 @@ func createHclProject(ctx context.Context, sourcePaths []string, workingDir stri
 	}
 	projectHclOptions.Env = getEnvs()
 
-	parsingContext := config.NewParsingContext(ctx, projectHclOptions)
+	parsingContext := newParsingContext(ctx, projectHclOptions)
 	locals, err := parseLocals(parsingContext, projectHclFile, nil)
 	if err != nil {
 		return nil, err
@@ -508,7 +506,7 @@ func createHclProject(ctx context.Context, sourcePaths []string, workingDir stri
 			return nil, err
 		}
 		opt.Env = getEnvs()
-		parsingContext := config.NewParsingContext(ctx, opt)
+		parsingContext := newParsingContext(ctx, opt)
 		dependencies, err := getDependencies(parsingContext, sourcePath)
 		if err != nil {
 			return nil, err
@@ -663,10 +661,10 @@ func FindConfigFilesInPath(rootPath string, opts *options.TerragruntOptions) ([]
 
 		for _, configFile := range []string{"root.hcl"} {
 			if !filepath.IsAbs(configFile) {
-				configFile = util.JoinPath(path, configFile)
+				configFile = joinPath(path, configFile)
 			}
 
-			if !util.IsDir(configFile) && util.FileExists(configFile) {
+			if !isDir(configFile) && fileExists(configFile) {
 				configFiles = append(configFiles, configFile)
 				break
 			}
