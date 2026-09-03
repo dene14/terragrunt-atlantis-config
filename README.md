@@ -7,6 +7,19 @@
 </p>
 <br />
 
+> **This fork is actively maintained.** The original repository
+> (`transcend-io/terragrunt-atlantis-config`) no longer publishes updates.
+> Highlights of this continuation:
+>
+> - **Terragrunt v1.x support** via a dedicated `--engine=cli` mode that
+>   delegates parsing to the terragrunt binary (works with v1.1.4 and newer)
+> - Deep **stacks support** (`--enable-stacks`), including nested stacks and
+>   unit-catalog watches — see [`README_STACKS.md`](README_STACKS.md)
+> - `terragrunt.values.hcl` sidecar support
+> - OpenTofu-specific syntax (e.g. indexed providers) handled correctly
+> - Preserved workflows are kept byte-identical between runs (no key
+>   reordering, comments survive)
+
 ## What is this?
 
 [Atlantis](https://runatlantis.io) is an awesome tool for Terraform pull request automation. Each repo can have a YAML config file that defines Terraform module dependencies, so that PRs that affect dependent modules will automatically generate `terraform plan`s for those modules.
@@ -21,6 +34,27 @@ This tool creates Atlantis YAML configurations for Terragrunt projects by:
 - Constructing and logging YAML in Atlantis' config spec that reflects the graph
 
 This is especially useful for organizations that use monorepos for their Terragrunt config (as we do at Transcend), and have thousands of lines of config.
+
+## Parsing engines
+
+Terragrunt v1.0 closed its Go API (parsing moved behind `internal/`), so this
+tool ships two parsing engines and picks between them with `--engine`:
+
+| Engine    | How it works                                                                                          | When to use it |
+| --------- | ------------------------------------------------------------------------------------------------------ | -------------- |
+| `cli`     | Runs `terragrunt find --json --dependencies --reading` on the terragrunt binary available on `$PATH`. Parsing semantics always match the terragrunt you actually execute plans with. | Terragrunt **v1.x** installs; stacks-heavy repos |
+| `library` | Uses an embedded copy of the terragrunt v0.99.x parser. Supports `atlantis_*` locals overrides and `--project-hcl-files`. | Repos without a terragrunt binary, older v0.x setups |
+| `auto`    | Uses `cli` when terragrunt v1+ is found on `$PATH`, otherwise falls back to `library`.                  | **Default** — safe everywhere |
+
+Notes:
+
+- The `cli` engine discovers stacks natively; stack projects additionally
+  watch the local unit sources they reference, so editing a shared unit
+  catalog re-triggers dependent stacks.
+- `atlantis_*` locals overrides, `--project-hcl-files`,
+  `--execution-order-groups` and `--depends-on` currently require the
+  `library` engine (the CLI does not expose locals to external tools).
+  Combining them with `--engine=cli` is rejected before generation starts.
 
 ## Integrate into your Atlantis Server
 
@@ -48,16 +82,17 @@ Then, make sure `terragrunt-atlantis-config` is present on your Atlantis server.
 
 ```hcl
 variable "terragrunt_atlantis_config_version" {
-  default = "1.21.1"
+  default = "1.24.0"
 }
 
 build {
   // ...
   provisioner "shell" {
     inline = [
-      "wget https://github.com/transcend-io/terragrunt-atlantis-config/releases/download/v${var.terragrunt_atlantis_config_version}/terragrunt-atlantis-config_${var.terragrunt_atlantis_config_version}_linux_amd64.tar.gz",
-      "sudo tar xf terragrunt-atlantis-config_${var.terragrunt_atlantis_config_version}_linux_amd64.tar.gz",
-      "sudo mv terragrunt-atlantis-config_${var.terragrunt_atlantis_config_version}_linux_amd64/terragrunt-atlantis-config_${var.terragrunt_atlantis_config_version}_linux_amd64 terragrunt-atlantis-config",
+      "wget https://github.com/dbccompany/terragrunt-atlantis-config/releases/download/v${var.terragrunt_atlantis_config_version}/terragrunt-atlantis-config_${var.terragrunt_atlantis_config_version}_linux_amd64",
+      "wget https://github.com/dbccompany/terragrunt-atlantis-config/releases/download/v${var.terragrunt_atlantis_config_version}/SHA256SUMS",
+      "grep 'linux_amd64$' SHA256SUMS | sha256sum -c -",
+      "mv terragrunt-atlantis-config_${var.terragrunt_atlantis_config_version}_linux_amd64 terragrunt-atlantis-config",
       "sudo install terragrunt-atlantis-config /usr/local/bin",
     ]
     inline_shebang = "/bin/bash -e"
@@ -107,6 +142,27 @@ If you specify `extra_atlantis_dependencies` in the parent Terragrunt module, th
 1. Any function in a parent will be evaluated from the child's directory. So you can use `get_parent_terragrunt_dir()` and other functions like you normally would in terragrunt.
 2. Absolute paths will work as they would in a child module, and the path in the output will be relative from the child module to the absolute path
 3. Relative paths, like the string `"foo.json"`, will be evaluated as relative to the Child module. This means that if you need something relative to the parent module, you should use something like `"${get_parent_terragrunt_dir()}/foo.json"`
+
+## Values sidecar (`terragrunt.values.hcl`)
+
+Terragrunt's stacks era introduced a convention where a `terragrunt.values.hcl`
+file sitting next to a `terragrunt.hcl` provides a `values` variable:
+
+```hcl
+# terragrunt.values.hcl
+environment = "staging"
+
+# terragrunt.hcl
+terraform {
+  source = "git::git@github.com:example/mod.git?ref=${values.module_ref}"
+}
+```
+
+Both engines handle this file: the `cli` engine inherits it from terragrunt
+itself, and the `library` engine attaches the same file to its evaluation
+context automatically (dynamic expressions in the sidecar are skipped with a
+debug log). Changes to `terragrunt.values.hcl` also retrigger autoplan because
+the directory already watches `*.hcl`.
 
 ## All Flags
 
@@ -205,7 +261,7 @@ Another way to customize the output is to use `locals` values in your terragrunt
 | `atlantis_terraform_version`  | Allows overriding the `--terraform-version` flag for a single module                                                                                           | string       |
 | `atlantis_autoplan`           | Allows overriding the `--autoplan` flag for a single module                                                                                                    | bool         |
 | `atlantis_skip`               | If true on a child module, that module will not appear in the output.<br>If true on a parent module, none of that parent's children will appear in the output. | bool         |
-| `extra_atlantis_dependencies` | See [Extra dependencies](https://github.com/transcend-io/terragrunt-atlantis-config#extra-dependencies)                                                        | list(string) |
+| `extra_atlantis_dependencies` | See [Extra dependencies](https://github.com/dbccompany/terragrunt-atlantis-config#extra-dependencies)                                                        | list(string) |
 | `atlantis_project`            | Create Atlantis project for a project hcl file. Only functional with `--project-hcl-files` and `--use-project-markers` | bool         |
 
 ## Separate workspace for parallel plan and apply
@@ -238,14 +294,25 @@ However, there is one exception where the values are merged, which is the `atlan
 
 You can install this tool locally to checkout what kinds of config it will generate for your repo, though in production it is recommended to [install this tool directly onto your Atlantis server](##integrate-into-your-atlantis-server)
 
-Recommended: Install any version via go install:
+Recommended: install via `go install`:
 
 ```bash
-go install github.com/transcend-io/terragrunt-atlantis-config@v1.21.1
+go install github.com/dbccompany/terragrunt-atlantis-config@latest
+```
+
+…or fetch a release binary and verify it against the published checksums:
+
+```bash
+VERSION="1.24.0"
+curl -sSfLO "https://github.com/dbccompany/terragrunt-atlantis-config/releases/download/v${VERSION}/terragrunt-atlantis-config_${VERSION}_linux_amd64"
+curl -sSfLO "https://github.com/dbccompany/terragrunt-atlantis-config/releases/download/v${VERSION}/SHA256SUMS"
+grep "linux_amd64$" SHA256SUMS | sha256sum -c -
+mv "terragrunt-atlantis-config_${VERSION}_linux_amd64" terragrunt-atlantis-config
+chmod 755 terragrunt-atlantis-config
 ```
 
 This module officially supports golang version v1.25, tested on Github with each build. 
-This module also officially supports both Windows and Nix-based file formats, tested on Github with each build. 
+This module also officially supports both Windows and Nix-based file formats, tested on Github with each build. CLI-engine tests additionally run against the real `terragrunt` binary (currently v1.1.4, sha256-pinned) on Linux and Windows runners.
 
 Usage Examples (see below sections for all options):
 
@@ -266,7 +333,8 @@ Finally, check the log output (or your output file) for the YAML.
 
 To test any changes you've made, run `make gotestsum` (or `make test` for standard golang testing).
 
-For maintainers, the directions on publishing a new release can be found [in the wiki](https://github.com/transcend-io/terragrunt-atlantis-config/wiki/How-to-publish-a-release).
+For maintainers: cut a release by pushing a `v*` tag — the release workflow
+builds all binaries plus SHA256/SHA512 checksums and publishes them.
 
 ## Contributors
 
@@ -274,8 +342,6 @@ For maintainers, the directions on publishing a new release can be found [in the
 
 ## Stargazers over time
 
-[![Stargazers over time](https://starchart.cc/transcend-io/terragrunt-atlantis-config.svg)](https://starchart.cc/transcend-io/terragrunt-atlantis-config)
+[![Stargazers over time](https://starchart.cc/dbccompany/terragrunt-atlantis-config.svg)](https://starchart.cc/dbccompany/terragrunt-atlantis-config)
 
 ## License
-
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Ftranscend-io%2Fterragrunt-atlantis-config.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Ftranscend-io%2Fterragrunt-atlantis-config?ref=badge_large)
