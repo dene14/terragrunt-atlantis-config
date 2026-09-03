@@ -7,7 +7,7 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 10
     reviewers:
-      - "transcend-io/engineering"
+      - "dene14"
     labels:
       - "dependencies"
       - "go"
@@ -28,7 +28,7 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 5
     reviewers:
-      - "transcend-io/engineering"
+      - "dene14"
     labels:
       - "dependencies"
       - "github-actions"
@@ -43,7 +43,7 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 3
     reviewers:
-      - "transcend-io/engineering"
+      - "dene14"
     labels:
       - "dependencies"
       - "docker"
