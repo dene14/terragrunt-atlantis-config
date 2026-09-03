@@ -797,3 +797,66 @@ func TestStacksNestedWithoutStacksFlag(t *testing.T) {
 func TestValuesSidecar(t *testing.T) {
 	runTest(t, "golden/values_sidecar.yaml", []string{"--root", "../test_examples/values_sidecar"})
 }
+
+// Workflows defined by users must survive regeneration byte-identical: key
+// order, comments, indentation. Anything else produces pointless diff churn
+// in the generated atlantis.yaml on every run.
+func TestWorkflowOrderPreservedVerbatim(t *testing.T) {
+	err := resetForRun()
+	if err != nil {
+		t.Fatal("Failed to reset default flags")
+	}
+
+	filename := filepath.Join("test_artifacts", fmt.Sprintf("%d.yaml", rand.Int()))
+	defer os.Remove(filename)
+
+	// zzz precedes aaa on purpose: alphabetical reserialization would flip
+	// them, verbatim preservation must not.
+	contents := []byte(`workflows:
+  zzz_custom:
+    # a comment that must survive
+    apply:
+      steps:
+      - run: terragrunt apply -auto-approve $PLANFILE
+  aaa_custom:
+    plan:
+      steps:
+      - run: terragrunt plan -out $PLANFILE
+`)
+	if err := os.WriteFile(filename, contents, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	first, err := RunWithFlags(filename, []string{
+		"generate", "--output", filename, "--root", filepath.Join("..", "test_examples", "basic_module"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// On Windows the generator CRLF-ifies its output; normalize before
+	// comparing so the assertions describe content, not line endings.
+	norm := func(s string) string { return strings.ReplaceAll(s, "\r\n", "\n") }
+
+	text := norm(string(first))
+	if !strings.Contains(text, "# a comment that must survive") {
+		t.Errorf("comment lost while preserving workflows:\n%s", text)
+	}
+	if strings.Index(text, "zzz_custom") > strings.Index(text, "aaa_custom") {
+		t.Errorf("workflow order changed:\n%s", text)
+	}
+	if !strings.Contains(text, norm(string(contents))) {
+		t.Errorf("workflows section not preserved verbatim:\n%s", text)
+	}
+
+	// Idempotency: generating over the produced file must be a no-op
+	second, err := RunWithFlags(filename, []string{
+		"generate", "--output", filename, "--root", filepath.Join("..", "test_examples", "basic_module"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if norm(string(first)) != norm(string(second)) {
+		t.Errorf("second run mutated the file:\nfirst:\n%s\nsecond:\n%s", first, second)
+	}
+}

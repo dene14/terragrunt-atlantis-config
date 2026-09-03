@@ -1098,15 +1098,31 @@ func main(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Preserved workflows are carried over verbatim (see preserve_order.go):
+	// emit the config without them, then append the original section, so key
+	// order and comments survive regeneration untouched.
+	preservedWorkflowsSection := ""
+	if preserveWorkflows && config.Workflows != nil {
+		if section := extractTopLevelKeySection(oldConfigRaw, "workflows"); section != "" {
+			preservedWorkflowsSection = section
+			config.Workflows = nil
+		}
+	}
+
 	// Convert config to YAML string
 	yamlBytes, err := yaml.Marshal(&config)
 	if err != nil {
 		return err
 	}
 
-	// Ensure newline characters are correct on windows machines, as the json encoding function in the stdlib
-	// uses "\n" for all newlines regardless of OS: https://github.com/golang/go/blob/master/src/encoding/json/stream.go#L211-L217
+	// Assemble with plain "\n" first, then convert for windows in one final
+	// pass (the json encoder emits "\n" on every OS:
+	// https://github.com/golang/go/blob/master/src/encoding/json/stream.go#L211-L217)
 	yamlString := string(yamlBytes)
+	if preservedWorkflowsSection != "" {
+		yamlString = strings.TrimRight(yamlString, "\n") + "\n" +
+			strings.TrimRight(preservedWorkflowsSection, "\r\n") + "\n"
+	}
 	if strings.Contains(runtime.GOOS, "windows") {
 		yamlString = strings.ReplaceAll(yamlString, "\n", "\r\n")
 	}

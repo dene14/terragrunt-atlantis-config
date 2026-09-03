@@ -69,15 +69,22 @@ type AutoplanConfig struct {
 	Enabled bool `json:"enabled"`
 }
 
+// oldConfigRaw holds the raw bytes of the previously generated output file so
+// sections that must survive byte-identical (preserved workflows) can be
+// extracted without a marshal round-trip.
+var oldConfigRaw []byte
+
 // Checks if an output file already exists. If it does, it reads it
 // in to preserve some parts of the old config
 func readOldConfig() (*AtlantisConfig, error) {
 	// The old file not existing is not an error, as it should not exist on the very first run
+	oldConfigRaw = nil
 	bytes, err := os.ReadFile(outputPath)
 	if err != nil {
 		log.Info("Could not find an old config file. Starting from scratch")
 		return nil, nil
 	}
+	oldConfigRaw = bytes
 
 	// The old file being malformed is an actual error
 	config := AtlantisConfig{}
