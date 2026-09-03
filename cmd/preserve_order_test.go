@@ -39,3 +39,16 @@ func TestExtractTopLevelKeySectionAtEOF(t *testing.T) {
 		t.Fatalf("truncated trailing section: %q", got)
 	}
 }
+
+func TestExtractTopLevelKeySectionCRLF(t *testing.T) {
+	// Files written by the generator itself on Windows are CRLF-normalized;
+	// they must round-trip identically.
+	doc := "version: 3\r\nworkflows:\r\n  zzz: {}\r\n  aaa: {}\r\nother: 1\r\n"
+	got := extractTopLevelKeySection([]byte(doc), "workflows")
+	if !strings.Contains(got, "zzz:") || !strings.Contains(got, "aaa:") {
+		t.Fatalf("CRLF section missing entries: %q", got)
+	}
+	if strings.Contains(got, "other:") {
+		t.Fatalf("CRLF section leaked neighbors: %q", got)
+	}
+}

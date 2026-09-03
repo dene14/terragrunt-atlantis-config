@@ -19,7 +19,9 @@ func extractTopLevelKeySection(yamlText []byte, key string) string {
 	header := key + ":"
 	start := -1
 	for i, line := range lines {
-		trimmed := strings.TrimRight(line, " \t")
+		// The previous output file may be CRLF-normalized (Windows checkouts
+		// and our own --output on Windows), so trailing \r must not hide keys.
+		trimmed := strings.TrimRight(line, " \t\r")
 		if trimmed == header {
 			start = i
 			break
@@ -48,5 +50,5 @@ func extractTopLevelKeySection(yamlText []byte, key string) string {
 	}
 
 	section := strings.Join(lines[start:end], "\n")
-	return strings.TrimRight(section, " \t\n") + "\n"
+	return strings.TrimRight(section, " \t\r\n") + "\n"
 }
