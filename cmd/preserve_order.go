@@ -14,14 +14,16 @@ import (
 // key (e.g. "workflows") — indentation, comments and key order included — or
 // "" when the key is absent. The returned text always ends with a newline.
 func extractTopLevelKeySection(yamlText []byte, key string) string {
-	lines := strings.Split(string(yamlText), "\n")
+	// Line endings carry no meaning for preservation: normalize CRLF (files
+	// written on Windows) up front, otherwise a trailing \r hides the key
+	// header, a bare "\r" line would look like the next top-level key, and
+	// the final CRLF conversion pass would produce "\r\r\n".
+	lines := strings.Split(strings.ReplaceAll(string(yamlText), "\r\n", "\n"), "\n")
 
 	header := key + ":"
 	start := -1
 	for i, line := range lines {
-		// The previous output file may be CRLF-normalized (Windows checkouts
-		// and our own --output on Windows), so trailing \r must not hide keys.
-		trimmed := strings.TrimRight(line, " \t\r")
+		trimmed := strings.TrimRight(line, " \t")
 		if trimmed == header {
 			start = i
 			break
@@ -50,5 +52,5 @@ func extractTopLevelKeySection(yamlText []byte, key string) string {
 	}
 
 	section := strings.Join(lines[start:end], "\n")
-	return strings.TrimRight(section, " \t\r\n") + "\n"
+	return strings.TrimRight(section, " \t\n") + "\n"
 }

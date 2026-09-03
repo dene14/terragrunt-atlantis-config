@@ -52,3 +52,17 @@ func TestExtractTopLevelKeySectionCRLF(t *testing.T) {
 		t.Fatalf("CRLF section leaked neighbors: %q", got)
 	}
 }
+
+func TestExtractTopLevelKeySectionCRLFBlankLines(t *testing.T) {
+	// A CRLF file whose workflows section contains an empty line: the empty
+	// line is a bare "\r" after splitting on "\n" and previously truncated
+	// the section or produced lone-\r artifacts on re-marshal.
+	doc := "version: 3\r\nprojects: []\r\nworkflows:\r\n  zzz: {}\r\n\r\n  aaa: {}\r\n"
+	got := extractTopLevelKeySection([]byte(doc), "workflows")
+	if !strings.Contains(got, "zzz:") || !strings.Contains(got, "aaa:") {
+		t.Fatalf("section truncated at CRLF blank line: %q", got)
+	}
+	if strings.ContainsRune(got, '\r') {
+		t.Fatalf("section must be LF-normalized: %q", got)
+	}
+}
