@@ -145,13 +145,13 @@ func parseTerraformFilesWithOpenTofuSupport(path string) ([]string, error) {
 	// For now, we'll return the basic dependencies that we know should be included
 	// This is a fallback when the standard parser fails
 	var sources = []string{}
-	
+
 	// Add the basic terraform files pattern
 	sources = append(sources, "*.tf*")
-	
+
 	// We could implement more sophisticated parsing here if needed
 	// For now, this ensures the tool doesn't fail completely
-	
+
 	return sources, nil
 }
 

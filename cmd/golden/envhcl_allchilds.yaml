@@ -655,6 +655,93 @@ projects:
     when_modified:
     - '*.hcl'
     - '*.tf*'
+  dir: stacks_basic/app-a
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+  dir: stacks_basic/app-b
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - ../app-a/terragrunt.hcl
+  dir: stacks_basic/app-c
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - ../vpc/terragrunt.hcl
+    - ../vpc/*.tf*
+  dir: stacks_hcl_example/units/app
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+  dir: stacks_hcl_example/units/vpc
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+  dir: stacks_local_units/stack/.terragrunt-stack/vpc
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - ../vpc/terragrunt.hcl
+    - ../vpc/*.tf*
+  dir: stacks_local_units/stack/app
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+  dir: stacks_local_units/stack/vpc
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - ../vpc/terragrunt.hcl
+    - ../vpc/*.tf*
+  dir: stacks_nested/catalog/db
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+  dir: stacks_nested/catalog/vpc
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - ../../../shared/vpc/terragrunt.hcl
+  dir: stacks_with_patterns/environments/production/app
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - ../../../shared/vpc/terragrunt.hcl
+  dir: stacks_with_patterns/environments/staging/app
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+  dir: stacks_with_patterns/shared/vpc
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
     - ../terragrunt.hcl
   dir: terraform_version/inherit_from_parent
   terraform_version: 0.12.9001
