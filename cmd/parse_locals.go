@@ -5,13 +5,15 @@ package cmd
 // parses the `locals` blocks and evaluates their contents.
 
 import (
+	"context"
 	"fmt"
+	"path/filepath"
+
 	"github.com/gruntwork-io/go-commons/errors"
-	"github.com/gruntwork-io/terragrunt/config"
-	"github.com/gruntwork-io/terragrunt/config/hclparse"
+	"github.com/gruntwork-io/terragrunt/pkg/config"
+	"github.com/gruntwork-io/terragrunt/pkg/config/hclparse"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/zclconf/go-cty/cty"
-	"path/filepath"
 )
 
 // ResolvedLocals are the parsed result of local values this module cares about
@@ -104,7 +106,7 @@ func parseLocals(ctx *config.ParsingContext, path string, includeFromChild *conf
 	}
 
 	// Decode just the Base blocks. See the function docs for DecodeBaseBlocks for more info on what base blocks are.
-	baseBlocks, err := config.DecodeBaseBlocks(ctx, file, includeFromChild)
+	baseBlocks, err := config.DecodeBaseBlocks(context.Background(), ctx, quietTerragruntLogger(), file, includeFromChild)
 	if err != nil {
 		return ResolvedLocals{}, err
 	}

@@ -1,15 +1,17 @@
 package cmd
 
 import (
+	"context"
+	"path/filepath"
+	_ "unsafe"
+
 	"github.com/gruntwork-io/go-commons/errors"
-	"github.com/gruntwork-io/terragrunt/config"
-	"github.com/gruntwork-io/terragrunt/config/hclparse"
-	"github.com/gruntwork-io/terragrunt/util"
+	"github.com/gruntwork-io/terragrunt/pkg/config"
+	"github.com/gruntwork-io/terragrunt/pkg/config/hclparse"
+	tglog "github.com/gruntwork-io/terragrunt/pkg/log"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclwrite"
-	"path/filepath"
-	_ "unsafe"
 )
 
 const bareIncludeKey = ""
@@ -49,8 +51,8 @@ func updateBareIncludeBlock(file *hcl.File, filename string) ([]byte, bool, erro
 	return hclFile.Bytes(), codeWasUpdated, nil
 }
 
-//go:linkname createTerragruntEvalContext github.com/gruntwork-io/terragrunt/config.createTerragruntEvalContext
-func createTerragruntEvalContext(ctx *config.ParsingContext, configPath string) (*hcl.EvalContext, error)
+//go:linkname createTerragruntEvalContext github.com/gruntwork-io/terragrunt/pkg/config.createTerragruntEvalContext
+func createTerragruntEvalContext(goctx context.Context, ctx *config.ParsingContext, l tglog.Logger, configPath string) (*hcl.EvalContext, error)
 
 // decodeHcl uses the HCL2 parser to decode the parsed HCL into the struct specified by out.
 //
@@ -91,7 +93,7 @@ func decodeHcl(
 		}
 	}
 
-	evalContext, err := createTerragruntEvalContext(ctx, filename)
+	evalContext, err := createTerragruntEvalContext(context.Background(), ctx, quietTerragruntLogger(), filename)
 	if err != nil {
 		return err
 	}
@@ -127,7 +129,7 @@ func decodeAsTerragruntInclude(
 //
 // If both of those are true, it is likely a parent module
 func parseModule(ctx *config.ParsingContext, path string) (isParent bool, includes []config.IncludeConfig, err error) {
-	configString, err := util.ReadFileAsString(path)
+	configString, err := readFileAsString(path)
 	if err != nil {
 		return false, nil, err
 	}

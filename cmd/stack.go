@@ -7,8 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gruntwork-io/terragrunt/config"
-	"github.com/gruntwork-io/terragrunt/options"
+	"github.com/gruntwork-io/terragrunt/pkg/options"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -347,7 +346,7 @@ func (sm *StackManager) loadStackHclFiles() ([]Stack, error) {
 
 	// Create parsing context - use empty options for now
 	terragruntOptions := options.NewTerragruntOptions()
-	ctx := config.NewParsingContext(context.Background(), terragruntOptions)
+	ctx := newParsingContext(context.Background(), terragruntOptions)
 
 	// Parse each stack file
 	stackDefinitions := []StackHclDefinition{}
