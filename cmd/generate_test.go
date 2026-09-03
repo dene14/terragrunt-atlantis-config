@@ -793,3 +793,7 @@ func TestStacksNestedWithoutStacksFlag(t *testing.T) {
 		filepath.Join("..", "test_examples", "stacks_nested"),
 	})
 }
+
+func TestValuesSidecar(t *testing.T) {
+	runTest(t, "golden/values_sidecar.yaml", []string{"--root", "../test_examples/values_sidecar"})
+}

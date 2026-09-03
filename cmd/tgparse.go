@@ -21,8 +21,9 @@ func quietTerragruntLogger() log.Logger {
 }
 
 // newParsingContext wraps config.NewParsingContext with the quiet logger so
-// call sites stay one-liners, mirroring the pre-0.98 API shape.
+// call sites stay one-liners, mirroring the pre-0.98 API shape. Parsing
+// contexts also pick up a sibling terragrunt.values.hcl when present.
 func newParsingContext(ctx context.Context, opts *options.TerragruntOptions) *config.ParsingContext {
 	_, pctx := config.NewParsingContext(ctx, quietTerragruntLogger(), opts)
-	return pctx
+	return attachSidecarValues(ctx, pctx)
 }
