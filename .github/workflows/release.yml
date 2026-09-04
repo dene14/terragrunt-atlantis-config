@@ -43,8 +43,11 @@ jobs:
       - name: Create checksums
         run: |
           readonly BUILD_DIR="build/${{ steps.get_version.outputs.VERSION }}"
-          find "$BUILD_DIR" -type f -exec sha256sum {} + | awk -v build_dir="$BUILD_DIR" '{sub("^"build_dir"/", ""); print $1, $2}' > SHA256SUMS
-          find "$BUILD_DIR" -type f -exec sha512sum {} + | awk -v build_dir="$BUILD_DIR" '{sub("^"build_dir"/", ""); print $1, $2}' > SHA512SUMS
+          # GNU coreutils checksum format: "<hash><two spaces><relative name>"
+          # (single-space or prefixed paths break `sha256sum -c` for users;
+          # see transcend-io/terragrunt-atlantis-config#309)
+          find "$BUILD_DIR" -type f -exec sha256sum {} + | awk -v build_dir="$BUILD_DIR" '{sub("^"build_dir"/", ""); printf "%s  %s\n", $1, $2}' > SHA256SUMS
+          find "$BUILD_DIR" -type f -exec sha512sum {} + | awk -v build_dir="$BUILD_DIR" '{sub("^"build_dir"/", ""); printf "%s  %s\n", $1, $2}' > SHA512SUMS
 
       # Create the release
       - uses: "marvinpinto/action-automatic-releases@d68defdd11f9dcc7f52f35c1b7c236ee7513bcc1"
