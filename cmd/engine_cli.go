@@ -137,6 +137,23 @@ func runTerragruntFind(ctx context.Context, bin, root string) ([]cliComponent, e
 	if err := json.Unmarshal([]byte(stdout.String()), &components); err != nil {
 		return nil, cliEngineError("could not parse `terragrunt find` output as JSON: %v", err)
 	}
+
+	// terragrunt emits platform-native path separators; normalize every
+	// path-shaped field to forward slashes right at the boundary so the whole
+	// engine (and golden fixtures) is OS-independent. Note: an unconditional
+	// replace is deliberate — filepath.ToSlash only converts the host OS'
+	// separator, which means backslashes in Windows-produced JSON would stay
+	// backslashes when processing that data off-Windows (e.g. in tests).
+	norm := func(s string) string { return strings.ReplaceAll(s, "\\", "/") }
+	for i := range components {
+		components[i].Path = norm(components[i].Path)
+		for j, dep := range components[i].Dependencies {
+			components[i].Dependencies[j] = norm(dep)
+		}
+		for j, r := range components[i].Reading {
+			components[i].Reading[j] = norm(r)
+		}
+	}
 	return components, nil
 }
 
