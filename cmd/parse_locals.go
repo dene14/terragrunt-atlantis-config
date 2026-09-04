@@ -36,6 +36,10 @@ type ResolvedLocals struct {
 	// Terraform version to use just for this project
 	TerraformVersion string
 
+	// Terraform distribution to use just for this project ("terraform" or
+	// "tofu" are the values Atlantis understands)
+	TerraformDistribution string
+
 	// If set to true, create Atlantis project
 	markedProject *bool
 }
@@ -75,6 +79,10 @@ func mergeResolvedLocals(parent ResolvedLocals, child ResolvedLocals) ResolvedLo
 
 	if child.TerraformVersion != "" {
 		parent.TerraformVersion = child.TerraformVersion
+	}
+
+	if child.TerraformDistribution != "" {
+		parent.TerraformDistribution = child.TerraformDistribution
 	}
 
 	if child.AutoPlan != nil {
@@ -143,6 +151,11 @@ func resolveLocals(localsAsCty cty.Value) (ResolvedLocals, error) {
 	versionValue, ok := rawLocals["atlantis_terraform_version"]
 	if ok {
 		resolved.TerraformVersion = versionValue.AsString()
+	}
+
+	distributionValue, ok := rawLocals["atlantis_terraform_distribution"]
+	if ok {
+		resolved.TerraformDistribution = distributionValue.AsString()
 	}
 
 	autoPlanValue, ok := rawLocals["atlantis_autoplan"]

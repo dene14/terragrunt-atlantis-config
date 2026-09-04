@@ -102,6 +102,8 @@ type StackManagerConfig struct {
 	CreateWorkspace         bool   // Whether to generate a workspace per project
 	AutoPlan                bool   // Global autoplan default, used when a stack does not set one
 	DefaultTerraformVersion string
+	// DefaultTerraformDistribution applies to stack projects (e.g. "tofu")
+	DefaultTerraformDistribution string
 }
 
 // StackManager manages stack discovery and project generation
@@ -288,9 +290,10 @@ func (sm *StackManager) GenerateStackProject(stack Stack) (*AtlantisProject, err
 	projectName := projectNameRegex.ReplaceAllString(stack.Name, "_")
 
 	project := &AtlantisProject{
-		Dir:              stackDir,
-		Workflow:         workflow,
-		TerraformVersion: terraformVersion,
+		Dir:                   stackDir,
+		Workflow:              workflow,
+		TerraformVersion:      terraformVersion,
+		TerraformDistribution: sm.config.DefaultTerraformDistribution,
 		Autoplan: AutoplanConfig{
 			Enabled:      autoPlanEnabled,
 			WhenModified: uniqueStrings(relativeDependencies),
