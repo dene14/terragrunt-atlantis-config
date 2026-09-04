@@ -25,6 +25,14 @@ func gitChangedFiles(root, ref string) ([]string, error) {
 		return nil, fmt.Errorf("git rev-parse failed: %w", err)
 	}
 	repoRoot := strings.TrimSpace(string(repoRootOut))
+	// Windows temp dirs arrive in 8.3 short form (RUNNER~1) while git answers
+	// with the canonical long path; Rel'ing across those never matches.
+	if resolved, err := filepath.EvalSymlinks(repoRoot); err == nil {
+		repoRoot = resolved
+	}
+	if resolved, err := filepath.EvalSymlinks(root); err == nil {
+		root = resolved
+	}
 	relInside, err := filepath.Rel(repoRoot, root)
 	if err != nil {
 		return nil, err
