@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -168,13 +167,15 @@ func TestGenerateCLIEngineWorkspaceAndName(t *testing.T) {
 	runTest(t, "golden/engine_cli_workspace_name.yaml", []string{"--engine", "cli", "--create-workspace", "--create-project-name", "--root", "../test_examples/chained_dependencies"})
 }
 
-func TestGenerateCLIEngineRejectsOrderGroups(t *testing.T) {
+// The cli engine supports execution-order-groups/depends-on since direct
+// dependency edges come straight from terragrunt's discovery output.
+func TestGenerateCLIEngineOrdering(t *testing.T) {
 	terragruntCLIOrSkip(t)
-	if err := resetForRun(); err != nil {
-		t.Fatal(err)
-	}
-	_, err := RunWithFlags(os.DevNull, []string{"generate", "--engine", "cli", "--execution-order-groups", "--root", "../test_examples/basic_module"})
-	if err == nil || !strings.Contains(err.Error(), "execution-order-groups") {
-		t.Fatalf("expected execution-order-groups rejection, got %v", err)
-	}
+	runTest(t, "golden/engine_cli_ordering.yaml", []string{
+		"--engine", "cli",
+		"--execution-order-groups",
+		"--depends-on",
+		"--create-project-name",
+		"--root", "../test_examples/chained_dependencies",
+	})
 }
