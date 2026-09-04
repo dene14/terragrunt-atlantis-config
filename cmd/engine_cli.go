@@ -361,9 +361,10 @@ func cliEngineProjects(components []cliComponent, root string) ([]AtlantisProjec
 		sort.Strings(sortedWatch)
 
 		project := AtlantisProject{
-			Dir:              dir,
-			Workflow:         workflow,
-			TerraformVersion: defaultTerraformVersion,
+			Dir:                   dir,
+			Workflow:              workflow,
+			TerraformVersion:      defaultTerraformVersion,
+			TerraformDistribution: defaultTerraformDistribution,
 			Autoplan: AutoplanConfig{
 				Enabled:      autoPlan,
 				WhenModified: sortedWatch,

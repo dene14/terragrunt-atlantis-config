@@ -405,11 +405,17 @@ func createProject(ctx context.Context, sourcePath string) (*AtlantisProject, er
 		terraformVersion = locals.TerraformVersion
 	}
 
+	terraformDistribution := defaultTerraformDistribution
+	if locals.TerraformDistribution != "" {
+		terraformDistribution = locals.TerraformDistribution
+	}
+
 	project := &AtlantisProject{
-		Dir:               filepath.ToSlash(relativeSourceDir),
-		Workflow:          workflow,
-		TerraformVersion:  terraformVersion,
-		ApplyRequirements: applyRequirements,
+		Dir:                   filepath.ToSlash(relativeSourceDir),
+		Workflow:              workflow,
+		TerraformVersion:      terraformVersion,
+		TerraformDistribution: terraformDistribution,
+		ApplyRequirements:     applyRequirements,
 		Autoplan: AutoplanConfig{
 			Enabled:      resolvedAutoPlan,
 			WhenModified: uniqueStrings(relativeDependencies),
@@ -499,6 +505,11 @@ func createHclProject(ctx context.Context, sourcePaths []string, workingDir stri
 		terraformVersion = locals.TerraformVersion
 	}
 
+	terraformDistribution := defaultTerraformDistribution
+	if locals.TerraformDistribution != "" {
+		terraformDistribution = locals.TerraformDistribution
+	}
+
 	// build dependencies for terragrunt childs in directories below project hcl file
 	for _, sourcePath := range sourcePaths {
 		opt, err := options.NewTerragruntOptionsWithConfigPath(sourcePath)
@@ -549,10 +560,11 @@ func createHclProject(ctx context.Context, sourcePaths []string, workingDir stri
 	}
 
 	project := &AtlantisProject{
-		Dir:               filepath.ToSlash(dir),
-		Workflow:          workflow,
-		TerraformVersion:  terraformVersion,
-		ApplyRequirements: applyRequirements,
+		Dir:                   filepath.ToSlash(dir),
+		Workflow:              workflow,
+		TerraformVersion:      terraformVersion,
+		TerraformDistribution: terraformDistribution,
+		ApplyRequirements:     applyRequirements,
 		Autoplan: AutoplanConfig{
 			Enabled:      resolvedAutoPlan,
 			WhenModified: uniqueStrings(append(childDependencies, projectHclDependencies...)),
@@ -838,14 +850,15 @@ func main(cmd *cobra.Command, args []string) error {
 			}
 
 			stackMgr = NewStackManager(StackManagerConfig{
-				GitRoot:                 gitRoot,
-				DefinitionFile:          definitionFile,
-				StackWorkflow:           stackWorkflow,
-				DefaultWorkflow:         defaultWorkflow,
-				CreateProjectName:       createProjectName,
-				CreateWorkspace:         createWorkspace,
-				AutoPlan:                autoPlan,
-				DefaultTerraformVersion: defaultTerraformVersion,
+				GitRoot:                      gitRoot,
+				DefinitionFile:               definitionFile,
+				StackWorkflow:                stackWorkflow,
+				DefaultWorkflow:              defaultWorkflow,
+				CreateProjectName:            createProjectName,
+				CreateWorkspace:              createWorkspace,
+				AutoPlan:                     autoPlan,
+				DefaultTerraformVersion:      defaultTerraformVersion,
+				DefaultTerraformDistribution: defaultTerraformDistribution,
 			})
 
 			// Discover stacks early so we can filter modules
@@ -1172,6 +1185,7 @@ var parallel bool
 var createWorkspace bool
 var createProjectName bool
 var defaultTerraformVersion string
+var defaultTerraformDistribution string
 var defaultWorkflow string
 var stackWorkflow string
 var stackDefinitionFile string
@@ -1234,6 +1248,7 @@ func init() {
 	generateCmd.PersistentFlags().StringSliceVar(&filterPaths, "filter", []string{}, "Comma-separated paths or glob expressions to the directories you want scope down the config for. Default is all files in root.")
 	generateCmd.PersistentFlags().StringVar(&gitRoot, "root", pwd, "Path to the root directory of the git repo you want to build config for. Default is current dir")
 	generateCmd.PersistentFlags().StringVar(&defaultTerraformVersion, "terraform-version", "", "Default terraform version to specify for all modules. Can be overriden by locals")
+	generateCmd.PersistentFlags().StringVar(&defaultTerraformDistribution, "terraform-distribution", "", "Default terraform distribution to specify for all modules (e.g. 'tofu'). Can be overriden by the atlantis_terraform_distribution locals")
 	generateCmd.PersistentFlags().Int64Var(&numExecutors, "num-executors", 15, "Number of executors used for parallel generation of projects. Default is 15")
 	generateCmd.PersistentFlags().StringSliceVar(&projectHclFiles, "project-hcl-files", []string{}, "Comma-separated names of arbitrary hcl files in the terragrunt hierarchy to create Atlantis projects for. Disables the --filter flag")
 	generateCmd.PersistentFlags().BoolVar(&createHclProjectChilds, "create-hcl-project-childs", false, "Creates Atlantis projects for terragrunt child modules below the directories containing the HCL files defined in --project-hcl-files")
