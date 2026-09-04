@@ -22,6 +22,9 @@ type AtlantisConfig struct {
 	// If Atlantis should allow applies to occur in parallel
 	ParallelApply bool `json:"parallel_apply"`
 
+	// If Atlantis should delete the source branch on merge
+	DeleteSourceBranchOnMerge bool `json:"delete_source_branch_on_merge,omitempty"`
+
 	// The project settings
 	Projects []AtlantisProject `json:"projects,omitempty"`
 
