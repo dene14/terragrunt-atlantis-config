@@ -86,7 +86,7 @@ func projectTouchedBy(project AtlantisProject, changed []string, root string) bo
 			// Patterns are dir-relative; normalize "../foo" segments by
 			// cleaning the join.
 			pattern := filepath.ToSlash(filepath.Clean(filepath.Join(base, watch)))
-			matched, err := doublestar.Match(pattern, file)
+			matched, err := doublestar.PathMatch(pattern, file)
 			if err == nil && matched {
 				return true
 			}
