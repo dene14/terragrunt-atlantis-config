@@ -1132,8 +1132,14 @@ func main(cmd *cobra.Command, args []string) error {
 		}
 
 		if hasChanges {
-			// Should be unreachable
-			log.Warn("Computing execution_order_groups failed. Probably cycle exists")
+			// The fixed-point loop did not converge: the project graph has a
+			// cycle. Name the cycle so the user can fix the dependency layout
+			// instead of staring at a generic warning (upstream issue #191).
+			if cycle := findProjectCycle(config.Projects); len(cycle) > 0 {
+				log.Warnf("Computing execution_order_groups failed: dependency cycle detected between projects: %s", formatProjectCycle(cycle))
+			} else {
+				log.Warn("Computing execution_order_groups failed. Probably cycle exists")
+			}
 		}
 
 		// Sort by execution_order_group
