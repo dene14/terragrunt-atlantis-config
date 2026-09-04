@@ -1049,6 +1049,11 @@ func main(cmd *cobra.Command, args []string) error {
 			for _, project := range config.Projects {
 				executionOrderGroup := 0
 				dependsOnList := []string{}
+				// A project can reference the same dependency through several
+				// when_modified entries (dependency block + var files living
+				// in the dependency's dir, cascades); depends_on must list
+				// each project once, keeping first-seen order for stability.
+				dependsOnSeen := map[string]bool{}
 				// choose order group based on dependencies
 				for _, dep := range project.Autoplan.WhenModified {
 					depPath := filepath.ToSlash(filepath.Dir(filepath.Join(project.Dir, dep)))
@@ -1067,7 +1072,10 @@ func main(cmd *cobra.Command, args []string) error {
 							executionOrderGroup = *depProject.ExecutionOrderGroup + 1
 						}
 					}
-					dependsOnList = append(dependsOnList, depProject.Name)
+					if !dependsOnSeen[depProject.Name] {
+						dependsOnSeen[depProject.Name] = true
+						dependsOnList = append(dependsOnList, depProject.Name)
+					}
 				}
 				if projectsMap[project.Dir].ExecutionOrderGroup == nil || *projectsMap[project.Dir].ExecutionOrderGroup != executionOrderGroup {
 					if executionOrderGroups {
