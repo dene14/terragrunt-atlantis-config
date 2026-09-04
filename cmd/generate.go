@@ -415,10 +415,7 @@ func createProject(ctx context.Context, sourcePath string) (*AtlantisProject, er
 		resolvedAutoPlan = *locals.AutoPlan
 	}
 
-	terraformVersion := defaultTerraformVersion
-	if locals.TerraformVersion != "" {
-		terraformVersion = locals.TerraformVersion
-	}
+	terraformVersion := resolveTerraformVersion(locals.TerraformVersion, filepath.Dir(sourcePath))
 
 	terraformDistribution := defaultTerraformDistribution
 	if locals.TerraformDistribution != "" {
@@ -462,7 +459,6 @@ func createHclProject(ctx context.Context, sourcePaths []string, workingDir stri
 	workflow := defaultWorkflow
 	applyRequirements := &defaultApplyRequirements
 	resolvedAutoPlan := autoPlan
-	terraformVersion := defaultTerraformVersion
 
 	projectHclFile := filepath.Join(workingDir, projectHcl)
 	projectHclOptions, err := options.NewTerragruntOptionsWithConfigPath(workingDir)
@@ -516,9 +512,7 @@ func createHclProject(ctx context.Context, sourcePaths []string, workingDir stri
 		resolvedAutoPlan = *locals.AutoPlan
 	}
 
-	if locals.TerraformVersion != "" {
-		terraformVersion = locals.TerraformVersion
-	}
+	terraformVersion := resolveTerraformVersion(locals.TerraformVersion, workingDir)
 
 	terraformDistribution := defaultTerraformDistribution
 	if locals.TerraformDistribution != "" {

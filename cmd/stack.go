@@ -280,7 +280,8 @@ func (sm *StackManager) GenerateStackProject(stack Stack) (*AtlantisProject, err
 	// Autoplan: explicit stack setting wins, otherwise follow the global flag
 	autoPlanEnabled := stack.AtlantisConfig.AutoPlan || sm.config.AutoPlan
 
-	terraformVersion := stack.AtlantisConfig.TerraformVersion
+	// Stack definition value > .terraform-version file near the stack > flag
+	terraformVersion := resolveTerraformVersion(stack.AtlantisConfig.TerraformVersion, filepath.Join(sm.config.GitRoot, stack.Name))
 	if terraformVersion == "" {
 		terraformVersion = sm.config.DefaultTerraformVersion
 	}

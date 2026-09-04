@@ -363,7 +363,7 @@ func cliEngineProjects(components []cliComponent, root string) ([]AtlantisProjec
 		project := AtlantisProject{
 			Dir:                   dir,
 			Workflow:              workflow,
-			TerraformVersion:      defaultTerraformVersion,
+			TerraformVersion:      resolveTerraformVersion("", filepath.Join(root, c.Path)),
 			TerraformDistribution: defaultTerraformDistribution,
 			Autoplan: AutoplanConfig{
 				Enabled:      autoPlan,
