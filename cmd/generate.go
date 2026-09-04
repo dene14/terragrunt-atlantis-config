@@ -791,10 +791,11 @@ func main(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	config := AtlantisConfig{
-		Version:       3,
-		AutoMerge:     autoMerge,
-		ParallelPlan:  parallel,
-		ParallelApply: parallel,
+		Version:                   3,
+		AutoMerge:                 autoMerge,
+		ParallelPlan:              parallel,
+		ParallelApply:             parallel,
+		DeleteSourceBranchOnMerge: deleteSourceBranchOnMerge,
 	}
 	if oldConfig != nil && preserveWorkflows {
 		config.Workflows = oldConfig.Workflows
@@ -1136,6 +1137,15 @@ func main(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// User-owned top-level keys (allowed_regexp_prefixes, checkout_strategy,
+	// delete_source_branch_on_merge, ...) also survive verbatim; explicit
+	// flags take precedence over preservation.
+	skipPreserved := []string{}
+	if deleteSourceBranchOnMerge {
+		skipPreserved = append(skipPreserved, "delete_source_branch_on_merge")
+	}
+	userSections := preservedUserSections(oldConfigRaw, skipPreserved...)
+
 	// Convert config to YAML string
 	yamlBytes, err := yaml.Marshal(&config)
 	if err != nil {
@@ -1149,6 +1159,10 @@ func main(cmd *cobra.Command, args []string) error {
 	if preservedWorkflowsSection != "" {
 		yamlString = strings.TrimRight(yamlString, "\n") + "\n" +
 			strings.TrimRight(preservedWorkflowsSection, "\r\n") + "\n"
+	}
+	for _, section := range userSections {
+		yamlString = strings.TrimRight(yamlString, "\n") + "\n" +
+			strings.TrimRight(section, "\r\n") + "\n"
 	}
 	if strings.Contains(runtime.GOOS, "windows") {
 		yamlString = strings.ReplaceAll(yamlString, "\n", "\r\n")
@@ -1182,6 +1196,7 @@ var ignoreParentTerragrunt bool
 var createParentProject bool
 var ignoreDependencyBlocks bool
 var parallel bool
+var deleteSourceBranchOnMerge bool
 var createWorkspace bool
 var createProjectName bool
 var defaultTerraformVersion string
@@ -1233,6 +1248,7 @@ func init() {
 
 	generateCmd.PersistentFlags().BoolVar(&autoPlan, "autoplan", false, "Enable auto plan. Default is disabled")
 	generateCmd.PersistentFlags().BoolVar(&autoMerge, "automerge", false, "Enable auto merge. Default is disabled")
+	generateCmd.PersistentFlags().BoolVar(&deleteSourceBranchOnMerge, "delete-source-branch-on-merge", false, "Tell Atlantis to delete the source branch after merge. Overrides any preserved value from a previous atlantis.yaml")
 	generateCmd.PersistentFlags().BoolVar(&ignoreParentTerragrunt, "ignore-parent-terragrunt", true, "Ignore parent terragrunt configs (those which don't reference a terraform module). Default is enabled")
 	generateCmd.PersistentFlags().BoolVar(&createParentProject, "create-parent-project", false, "Create a project for the parent terragrunt configs (those which don't reference a terraform module). Default is disabled")
 	generateCmd.PersistentFlags().BoolVar(&ignoreDependencyBlocks, "ignore-dependency-blocks", false, "When true, dependencies found in `dependency` blocks will be ignored")

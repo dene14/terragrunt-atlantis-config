@@ -172,6 +172,7 @@ One way to customize the behavior of this module is through CLI flag values pass
 |------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------|
 | `--autoplan`                 | The default value for autoplan settings. Can be overridden by locals.                                                                                                            | false             |
 | `--automerge`                | Enables the automerge setting for a repo.                                                                                                                                       | false             |
+| `--delete-source-branch-on-merge` | Sets `delete_source_branch_on_merge` in the generated config. Overrides any preserved value from a previous `atlantis.yaml`                                                 | false             |
 | `--cascade-dependencies`     | When true, dependencies will cascade, meaning that a module will be declared to depend not only on its dependencies, but all dependencies of its dependencies all the way down. | true              |
 | `--ignore-parent-terragrunt` | Ignore parent Terragrunt configs (those which don't reference a terraform module).<br>In most cases, this should be set to `true`                                               | true              |
 | `--parallel`                 | Enables `plan`s and `apply`s to happen in parallel. Will typically be used with `--create-workspace`                                                                            | true              |
@@ -239,6 +240,13 @@ workflows:
 ```
 
 (`terragrunt stack run` regenerates the stack into `.terragrunt-stack` before executing)
+
+**Preserved keys:** besides `workflows` (via `--preserve-workflows`, enabled by default), any other
+top-level key this tool does not generate itself — e.g. `allowed_regexp_prefixes`,
+`allowed_overrides`, `checkout_strategy`, `default_tf_version`,
+`delete_source_branch_on_merge` — is carried over verbatim from the previous output file,
+comments and ordering included. Flags that set a preserved key (today: `--delete-source-branch-on-merge`)
+win over the preserved value.
 
 ## Project generation
 
