@@ -51,10 +51,11 @@ Notes:
 - The `cli` engine discovers stacks natively; stack projects additionally
   watch the local unit sources they reference, so editing a shared unit
   catalog re-triggers dependent stacks.
-- `atlantis_*` locals overrides, `--project-hcl-files`,
-  `--execution-order-groups` and `--depends-on` currently require the
-  `library` engine (the CLI does not expose locals to external tools).
-  Combining them with `--engine=cli` is rejected before generation starts.
+- `atlantis_*` locals overrides and `--project-hcl-files` currently require
+  the `library` engine (the CLI does not expose locals or arbitrary hcl
+  projects to external tools). `--execution-order-groups` and `--depends-on`
+  work in both engines: the cli engine computes them from the exact
+  dependency graph that `terragrunt find` reports.
 
 ## Integrate into your Atlantis Server
 

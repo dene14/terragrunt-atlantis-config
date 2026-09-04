@@ -137,6 +137,23 @@ func runTerragruntFind(ctx context.Context, bin, root string) ([]cliComponent, e
 	if err := json.Unmarshal([]byte(stdout.String()), &components); err != nil {
 		return nil, cliEngineError("could not parse `terragrunt find` output as JSON: %v", err)
 	}
+
+	// terragrunt emits platform-native path separators; normalize every
+	// path-shaped field to forward slashes right at the boundary so the whole
+	// engine (and golden fixtures) is OS-independent. Note: an unconditional
+	// replace is deliberate — filepath.ToSlash only converts the host OS'
+	// separator, which means backslashes in Windows-produced JSON would stay
+	// backslashes when processing that data off-Windows (e.g. in tests).
+	norm := func(s string) string { return strings.ReplaceAll(s, "\\", "/") }
+	for i := range components {
+		components[i].Path = norm(components[i].Path)
+		for j, dep := range components[i].Dependencies {
+			components[i].Dependencies[j] = norm(dep)
+		}
+		for j, r := range components[i].Reading {
+			components[i].Reading[j] = norm(r)
+		}
+	}
 	return components, nil
 }
 
@@ -387,8 +404,87 @@ func cliEngineProjects(components []cliComponent, root string) ([]AtlantisProjec
 		projects = append(projects, project)
 	}
 
-	sort.Slice(projects, func(i, j int) bool { return projects[i].Dir < projects[j].Dir })
+	// Ordering features work straight off the discovered dependency graph —
+	// the cli engine has exact edges, so it does not need to re-derive them
+	// from when_modified globs like the library engine does.
+	if executionOrderGroups || dependsOn {
+		applyCLIOrdering(projects, direct)
+	}
+
+	if executionOrderGroups {
+		// Same presentation order as the library engine: by group then dir
+		sort.Slice(projects, func(i, j int) bool {
+			a, b := projects[i].ExecutionOrderGroup, projects[j].ExecutionOrderGroup
+			if a != nil && b != nil && *a != *b {
+				return *a < *b
+			}
+			return projects[i].Dir < projects[j].Dir
+		})
+	} else {
+		sort.Slice(projects, func(i, j int) bool { return projects[i].Dir < projects[j].Dir })
+	}
 	return projects, nil
+}
+
+// intPtr returns a fresh pointer for a group value.
+func intPtr(v int) *int { return &v }
+
+// applyCLIOrdering assigns execution_order_group and depends_on from the
+// direct dependency edges reported by terragrunt (kept projects only).
+func applyCLIOrdering(projects []AtlantisProject, direct map[string][]string) {
+	included := make(map[string]*AtlantisProject, len(projects))
+	for i := range projects {
+		included[projects[i].Dir] = &projects[i]
+	}
+
+	var namesOf []string
+	groups := map[string]int{}
+
+	changed := true
+	for rounds := 0; changed && rounds <= len(projects); rounds++ {
+		changed = false
+		for i := range projects {
+			dir := projects[i].Dir
+			best := groups[dir]
+			for _, depDir := range direct[dir] {
+				if _, ok := included[depDir]; !ok || depDir == dir {
+					continue
+				}
+				if groups[depDir]+1 > best {
+					best = groups[depDir] + 1
+				}
+			}
+			if best != groups[dir] || (executionOrderGroups && projects[i].ExecutionOrderGroup == nil) {
+				groups[dir] = best
+				if executionOrderGroups {
+					projects[i].ExecutionOrderGroup = intPtr(best)
+				}
+				changed = true
+			}
+		}
+	}
+	if changed {
+		log.Warn("Computing execution_order_groups failed. Probably cycle exists")
+	}
+
+	if dependsOn {
+		for i := range projects {
+			if projects[i].Name == "" {
+				continue
+			}
+			namesOf = namesOf[:0]
+			seen := map[string]bool{}
+			for _, depDir := range direct[projects[i].Dir] {
+				dep, ok := included[depDir]
+				if !ok || dep.Name == "" || depDir == projects[i].Dir || seen[dep.Name] {
+					continue
+				}
+				seen[dep.Name] = true
+				namesOf = append(namesOf, dep.Name)
+			}
+			projects[i].DependsOn = append([]string(nil), namesOf...)
+		}
+	}
 }
 
 // generateProjectsWithCLIEngine is the cli engine's discovery+projection

@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/ghodss/yaml"
 )
 
 func TestResolveEngineForced(t *testing.T) {
@@ -168,13 +170,94 @@ func TestGenerateCLIEngineWorkspaceAndName(t *testing.T) {
 	runTest(t, "golden/engine_cli_workspace_name.yaml", []string{"--engine", "cli", "--create-workspace", "--create-project-name", "--root", "../test_examples/chained_dependencies"})
 }
 
-func TestGenerateCLIEngineRejectsOrderGroups(t *testing.T) {
+// The cli engine supports execution-order-groups/depends-on since direct
+// dependency edges come straight from terragrunt's discovery output. The
+// assertions are semantic (not golden): terragrunt's own Windows discovery
+// currently loses deep `../../` edges, so shape-parity must not be asserted
+// cross-OS while the fix lands upstream.
+func TestGenerateCLIEngineOrdering(t *testing.T) {
 	terragruntCLIOrSkip(t)
+
 	if err := resetForRun(); err != nil {
 		t.Fatal(err)
 	}
-	_, err := RunWithFlags(os.DevNull, []string{"generate", "--engine", "cli", "--execution-order-groups", "--root", "../test_examples/basic_module"})
-	if err == nil || !strings.Contains(err.Error(), "execution-order-groups") {
-		t.Fatalf("expected execution-order-groups rejection, got %v", err)
+	filename := "test_artifacts/cli_ordering.yaml"
+	defer os.Remove(filename)
+
+	content, err := RunWithFlags(filename, []string{
+		"generate", "--engine", "cli",
+		"--execution-order-groups", "--depends-on", "--create-project-name",
+		"--output", filename, "--root", "../test_examples/chained_dependencies",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := &AtlantisConfig{}
+	if err := yaml.Unmarshal(content, p); err != nil {
+		t.Fatal(err)
+	}
+	groups := map[string]int{}
+	names := map[string][]string{}
+	for _, proj := range p.Projects {
+		if proj.ExecutionOrderGroup != nil {
+			groups[proj.Dir] = *proj.ExecutionOrderGroup
+		}
+		names[proj.Dir] = proj.DependsOn
+	}
+
+	if groups["depender"] <= groups["dependency"] {
+		t.Fatalf("depender must come after dependency: %v", groups)
+	}
+	if got := names["depender"]; len(got) != 1 || got[0] != "dependency" {
+		t.Fatalf("depender must depends_on exactly [dependency], got %v", got)
+	}
+	if groups["depender_on_depender"] < groups["depender"] {
+		t.Fatalf("chain must be monotone: %v", groups)
+	}
+}
+
+// Simulating Windows-shaped discovery output (backslashes): ordering must use
+// identical semantics as on POSIX. Guards the ingest normalization.
+func TestCLIOrderingHandlesBackslashEdges(t *testing.T) {
+	components := []cliComponent{
+		{Type: "unit", Path: `dependency`},
+		{Type: "unit", Path: `depender`, Dependencies: []string{`dependency`}},
+		{Type: "unit", Path: `depender_on_depender`, Dependencies: []string{`depender`, `depender_on_depender\nested`}},
+		{Type: "unit", Path: `depender_on_depender\nested`, Dependencies: []string{`dependency`}},
+	}
+
+	// apply ingest normalization as runTerragruntFind does
+	norm := func(s string) string { return strings.ReplaceAll(s, "\\", "/") }
+	for i := range components {
+		components[i].Path = norm(components[i].Path)
+		for j, dep := range components[i].Dependencies {
+			components[i].Dependencies[j] = norm(dep)
+		}
+	}
+
+	oldEOG, oldDO, oldPN := executionOrderGroups, dependsOn, createProjectName
+	defer func() { executionOrderGroups, dependsOn, createProjectName = oldEOG, oldDO, oldPN }()
+	executionOrderGroups, dependsOn, createProjectName = true, true, true
+
+	projects, err := cliEngineProjects(components, ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	groupOf := map[string]int{}
+	depsOf := map[string][]string{}
+	for _, p := range projects {
+		if p.ExecutionOrderGroup != nil {
+			groupOf[p.Dir] = *p.ExecutionOrderGroup
+		}
+		depsOf[p.Dir] = p.DependsOn
+	}
+
+	if groupOf["dependency"] != 0 || groupOf["depender"] != 1 || groupOf["depender_on_depender"] != 2 || groupOf["depender_on_depender/nested"] != 1 {
+		t.Fatalf("wrong groups: %v", groupOf)
+	}
+	if len(depsOf["depender_on_depender"]) != 2 {
+		t.Fatalf("expected two depends_on entries: %v", depsOf["depender_on_depender"])
 	}
 }

@@ -827,10 +827,6 @@ func main(cmd *cobra.Command, args []string) error {
 
 	resolvedEngine := resolveEngine(gitRoot)
 	if resolvedEngine == engineCLI {
-		if executionOrderGroups || dependsOn {
-			return fmt.Errorf("--execution-order-groups and --depends-on are not supported with --engine=cli yet")
-		}
-
 		cliProjects, err := generateProjectsWithCLIEngine(gitRoot)
 		if err != nil {
 			return err
@@ -1077,7 +1073,9 @@ func main(cmd *cobra.Command, args []string) error {
 	// Sort the projects in config by Dir
 	sort.Slice(config.Projects, func(i, j int) bool { return config.Projects[i].Dir < config.Projects[j].Dir })
 
-	if executionOrderGroups || dependsOn {
+	// The cli engine already assigned ordering from exact dependency edges;
+	// the library engine reconstructs below from watch entries.
+	if (executionOrderGroups || dependsOn) && resolvedEngine != engineCLI {
 		projectsMap := make(map[string]*AtlantisProject, len(config.Projects))
 		for i := range config.Projects {
 			projectsMap[config.Projects[i].Dir] = &config.Projects[i]
