@@ -1,0 +1,26 @@
+automerge: false
+parallel_apply: true
+parallel_plan: true
+projects:
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+  dir: env/deep/nested
+  terraform_version: 1.5.7
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+  dir: env/freeform
+  terraform_version: 1.5.7
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+  dir: env/pinned
+  terraform_version: 1.5.7
+version: 3
