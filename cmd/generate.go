@@ -688,6 +688,14 @@ func FindConfigFilesInPath(rootPath string, opts *options.TerragruntOptions) ([]
 			return filepath.SkipDir
 		}
 
+		// Never walk into .terragrunt-cache: it holds *copies* of configs
+		// (incl. generated root.hcl) that would otherwise spawn duplicate,
+		// garbage projects (upstream issue #434). Applies regardless of the
+		// stacks toggle, matching the terragrunt library's own behavior.
+		if info.IsDir() && (filepath.Base(path) == ".terragrunt-cache" || strings.Contains(path, "/.terragrunt-cache/") || strings.Contains(path, "\\.terragrunt-cache\\")) {
+			return filepath.SkipDir
+		}
+
 		if !info.IsDir() {
 			return nil
 		}
