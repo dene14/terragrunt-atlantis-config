@@ -599,6 +599,12 @@ func getAllTerragruntFiles(path string) ([]string, error) {
 			if err != nil {
 				return nil, err
 			}
+			// A filter matching nothing silently produces an empty
+			// atlantis.yaml, which is a very expensive way to learn about a
+			// typo. Fail loudly instead.
+			if len(theseWorkingPaths) == 0 {
+				return nil, fmt.Errorf("--filter %q matched no directories", filterPath)
+			}
 			workingPaths = append(workingPaths, theseWorkingPaths...)
 		}
 	}

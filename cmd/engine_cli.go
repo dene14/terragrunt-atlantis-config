@@ -309,7 +309,11 @@ func transitiveDependencies(components []cliComponent, direct map[string][]strin
 
 // cliEngineProjects converts discovered components into Atlantis projects.
 func cliEngineProjects(components []cliComponent, root string) ([]AtlantisProject, error) {
+	before := len(components)
 	components = filterComponents(components, filterPaths)
+	if len(filterPaths) > 0 && len(components) == 0 && before > 0 {
+		return nil, cliEngineError("--filter %q matched no discovered components", strings.Join(filterPaths, ", "))
+	}
 
 	direct := make(map[string][]string, len(components))
 	for _, c := range components {
