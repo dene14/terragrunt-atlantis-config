@@ -14,6 +14,9 @@ func TestTerraformDistributionLocal(t *testing.T) {
 
 // The flag sets a default for every project.
 func TestTerraformDistributionFlag(t *testing.T) {
+	// package-level flag state must not leak into other suite tests
+	defer func() { defaultTerraformDistribution = "" }()
+
 	runTest(t, "golden/terraform_distribution_flag.yaml", []string{
 		"--root", "../test_examples_issues/terraform_distribution",
 		"--terraform-distribution", "tofu",
