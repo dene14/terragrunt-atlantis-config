@@ -1183,7 +1183,10 @@ func main(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to write output file: %w", err)
 		}
 	} else {
-		log.Println(yamlString)
+		// The generated config is the program's payload, not a log line: it
+		// goes to stdout so `generate | yq ...` pipelines work. Diagnostics
+		// keep flowing to stderr via logrus.
+		fmt.Println(yamlString)
 	}
 
 	return nil
