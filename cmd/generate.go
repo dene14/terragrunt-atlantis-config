@@ -181,10 +181,25 @@ func getDependencies(ctx *config.ParsingContext, path string) ([]string, error) 
 		}
 
 		// Get deps from `dependencies` and `dependency` blocks
-		if parsedConfig.Dependencies != nil && !ignoreDependencyBlocks {
+		if parsedConfig.Dependencies != nil {
+			depBlockPaths := make([]string, 0, len(parsedConfig.Dependencies.Paths))
 			for _, parsedPaths := range parsedConfig.Dependencies.Paths {
-				dependencies = append(dependencies, filepath.Join(parsedPaths, "terragrunt.hcl"))
+				depPath := filepath.Join(parsedPaths, "terragrunt.hcl")
+				depBlockPaths = append(depBlockPaths, depPath)
+				if !ignoreDependencyBlocks {
+					dependencies = append(dependencies, depPath)
+				}
 			}
+			// Ordering (--execution-order-groups / --depends-on) must respect
+			// dependency edges even when they are deliberately not watched.
+			absEdges := make([]string, 0, len(depBlockPaths))
+			for _, depPath := range depBlockPaths {
+				if !filepath.IsAbs(depPath) {
+					depPath = makePathAbsolute(depPath, path)
+				}
+				absEdges = append(absEdges, depPath)
+			}
+			recordDepBlockEdges(path, absEdges)
 		}
 
 		// Get deps from the `Source` field of the `Terraform` block
@@ -763,6 +778,10 @@ func getAllTerragruntProjectHclFiles() map[string][]string {
 }
 
 func main(cmd *cobra.Command, args []string) error {
+	// Fresh run: drop dependency-block edges recorded by a previous generate
+	// in the same process (matters for tests and library/embedded use)
+	resetDepGraph()
+
 	// Ensure the gitRoot has a trailing slash and is an absolute path
 	absoluteGitRoot, err := filepath.Abs(gitRoot)
 	if err != nil {
@@ -1074,8 +1093,10 @@ func main(cmd *cobra.Command, args []string) error {
 				// in the dependency's dir, cascades); depends_on must list
 				// each project once, keeping first-seen order for stability.
 				dependsOnSeen := map[string]bool{}
-				// choose order group based on dependencies
-				for _, dep := range project.Autoplan.WhenModified {
+				// choose order group based on dependencies; orderingInputs()
+				// also merges in dependency-block edges that
+				// --ignore-dependency-blocks removed from the watch list
+				for _, dep := range orderingInputs(project) {
 					depPath := filepath.ToSlash(filepath.Dir(filepath.Join(project.Dir, dep)))
 					if depPath == project.Dir {
 						// skip dependency on oneself
