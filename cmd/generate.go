@@ -1070,6 +1070,15 @@ func main(cmd *cobra.Command, args []string) error {
 
 	} // end library engine discovery
 
+	if gitFilter != "" {
+		filtered, err := filterProjectsByGitDiff(config.Projects, gitRoot, gitFilter)
+		if err != nil {
+			return err
+		}
+		log.Infof("--filter-git: kept %d of %d projects touched by %s...HEAD", len(filtered), len(config.Projects), gitFilter)
+		config.Projects = filtered
+	}
+
 	// Sort the projects in config by Dir
 	sort.Slice(config.Projects, func(i, j int) bool { return config.Projects[i].Dir < config.Projects[j].Dir })
 
@@ -1240,6 +1249,7 @@ var enableStacks bool
 // project names and workspace names.
 var projectNameRegex = regexp.MustCompile(`[^a-zA-Z0-9_-]+`)
 var filterPaths []string
+var gitFilter string
 var outputPath string
 var preserveWorkflows bool
 var preserveProjects bool
@@ -1292,6 +1302,7 @@ func init() {
 	generateCmd.PersistentFlags().StringSliceVar(&defaultApplyRequirements, "apply-requirements", []string{}, "Requirements that must be satisfied before `atlantis apply` can be run. Currently the only supported requirements are `approved` and `mergeable`. Can be overridden by locals")
 	generateCmd.PersistentFlags().StringVar(&outputPath, "output", "", "Path of the file where configuration will be generated. Default is not to write to file")
 	generateCmd.PersistentFlags().StringSliceVar(&filterPaths, "filter", []string{}, "Comma-separated paths or glob expressions to the directories you want scope down the config for. Default is all files in root.")
+	generateCmd.PersistentFlags().StringVar(&gitFilter, "filter-git", "", "Only include projects whose autoplan triggers were touched between the given git ref and HEAD (e.g. origin/main). Works with both engines.")
 	generateCmd.PersistentFlags().StringVar(&gitRoot, "root", pwd, "Path to the root directory of the git repo you want to build config for. Default is current dir")
 	generateCmd.PersistentFlags().StringVar(&defaultTerraformVersion, "terraform-version", "", "Default terraform version to specify for all modules. Can be overriden by locals")
 	generateCmd.PersistentFlags().StringVar(&defaultTerraformDistribution, "terraform-distribution", "", "Default terraform distribution to specify for all modules (e.g. 'tofu'). Can be overriden by the atlantis_terraform_distribution locals")
