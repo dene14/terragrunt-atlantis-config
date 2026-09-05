@@ -5,8 +5,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-
-	"github.com/bmatcuk/doublestar"
 )
 
 // --filter-git limits generation to projects whose autoplan triggers were
@@ -86,8 +84,7 @@ func projectTouchedBy(project AtlantisProject, changed []string, root string) bo
 			// Patterns are dir-relative; normalize "../foo" segments by
 			// cleaning the join.
 			pattern := filepath.ToSlash(filepath.Clean(filepath.Join(base, watch)))
-			matched, err := doublestar.PathMatch(pattern, file)
-			if err == nil && matched {
+			if matchGlob(pattern, file) {
 				return true
 			}
 		}
