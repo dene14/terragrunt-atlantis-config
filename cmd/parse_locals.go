@@ -193,7 +193,7 @@ func resolveLocals(localsAsCty cty.Value) (ResolvedLocals, error) {
 			pos, val := it.Element()
 			if !val.Type().Equals(cty.String) {
 				posInt, _ := pos.AsBigFloat().Int64()
-				return resolved, fmt.Errorf("extra_atlantis_dependencies contains non-string value at position %d", posInt)
+				return resolved, asMarkerError(fmt.Errorf("extra_atlantis_dependencies contains non-string value at position %d", posInt))
 			}
 
 			resolved.ExtraAtlantisDependencies = append(

@@ -23,6 +23,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // Parse env vars into a map
@@ -826,6 +827,7 @@ func main(cmd *cobra.Command, args []string) error {
 	}
 
 	resolvedEngine := resolveEngine(gitRoot)
+	var failedProjects atomic.Int64
 	if resolvedEngine == engineCLI {
 		cliProjects, err := generateProjectsWithCLIEngine(gitRoot)
 		if err != nil {
@@ -953,12 +955,21 @@ func main(cmd *cobra.Command, args []string) error {
 						return err
 					}
 
-					errGroup.Go(func() error {
-						defer sem.Release(1)
-						project, err := createProject(ctx, terragruntPath)
-						if err != nil {
+				errGroup.Go(func() error {
+					defer sem.Release(1)
+					project, err := createProject(ctx, terragruntPath)
+					if err != nil {
+						// Our own locals-annotation errors stay fatal;
+						// terragrunt-side eval failures degrade to a skipped
+						// project + warning, so one bad leaf can't sink a
+						// 400-module monorepo.
+						if isMarkerError(err) {
 							return err
 						}
+						log.Warnf("Skipping %s: %v", terragruntPath, err)
+						failedProjects.Add(1)
+						return nil
+					}
 						// if project and err are nil then skip this project
 						if err == nil && project == nil {
 							return nil
@@ -1069,6 +1080,12 @@ func main(cmd *cobra.Command, args []string) error {
 		}
 
 	} // end library engine discovery
+
+	// When everything we discovered failed, generation was meaningless:
+	// report it rather than emitting an empty config that looks healthy.
+	if failedProjects.Load() > 0 && len(config.Projects) == 0 {
+		return fmt.Errorf("generation failed: every discovered module (%d) errored; see warnings above", failedProjects.Load())
+	}
 
 	if gitFilter != "" {
 		filtered, err := filterProjectsByGitDiff(config.Projects, gitRoot, gitFilter)
