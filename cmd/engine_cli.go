@@ -160,6 +160,10 @@ func runTerragruntFind(ctx context.Context, bin, root string) ([]cliComponent, e
 // filterComponents keeps components whose path is equal to or below any of
 // the filter expressions, mirroring the library engine's --filter semantics
 // (paths or globs relative to the root).
+// filterComponents mirrors the library engine's --filter semantics: a filter
+// picks directories, and everything below a matching directory is in scope.
+// (Matching component trails literally was the root cause of the empty-output
+// failure for directory-glob filters like `terraform/*/qa`.)
 func filterComponents(components []cliComponent, filters []string) []cliComponent {
 	if len(filters) == 0 {
 		return components
@@ -167,15 +171,39 @@ func filterComponents(components []cliComponent, filters []string) []cliComponen
 	kept := []cliComponent{}
 	for _, c := range components {
 		for _, f := range filters {
-			f = filepath.ToSlash(f)
-			matched, _ := filepath.Match(f, c.Path)
-			if matched || c.Path == f || strings.HasPrefix(c.Path, strings.TrimSuffix(f, "/")+"/") {
+			if dirGlobMatches(f, c.Path) {
 				kept = append(kept, c)
 				break
 			}
 		}
 	}
 	return kept
+}
+
+// dirGlobMatches treats a filter pattern like the library engine does: it
+// selects directories; everything beneath a matched directory qualifies.
+// Plain directories never leave the fast path; glob patterns (incl. **)
+// compare at every ancestor level.
+func dirGlobMatches(pattern, path string) bool {
+	// normalize BOTH inputs with raw replaces (never filepath.ToSlash: it is
+	// a no-op off-Windows, which turns "portable" code into host-dependent)
+	sep := func(s string) string { return strings.ReplaceAll(s, "\\", "/") }
+	pattern, path = strings.TrimSuffix(sep(pattern), "/"), sep(path)
+
+	if !strings.ContainsAny(pattern, "*?[\\") {
+		return path == pattern || strings.HasPrefix(path, pattern+"/")
+	}
+	d := path
+	for {
+		if matchGlob(pattern, d) {
+			return true
+		}
+		idx := strings.LastIndexByte(d, '/')
+		if idx <= 0 {
+			return false
+		}
+		d = d[:idx]
+	}
 }
 
 // componentWatchFiles computes autoplan when_modified entries for one

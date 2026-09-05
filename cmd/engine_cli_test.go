@@ -261,3 +261,36 @@ func TestCLIOrderingHandlesBackslashEdges(t *testing.T) {
 		t.Fatalf("expected two depends_on entries: %v", depsOf["depender_on_depender"])
 	}
 }
+
+// dir-level semantics: filter patterns select directories; descendants stay.
+// Caught first on Windows CI where glob libraries split on '\'.
+func TestDirGlobMatches(t *testing.T) {
+	cases := []struct {
+		pattern, path string
+		want          bool
+	}{
+		{"terraform/*/qa", "terraform/akeyless/qa", true},
+		{"terraform/*/qa", "terraform/akeyless/qa/apps/x", true},
+		{"terraform/*/qa", "terraform/akeyless/qa2/apps/x", false},
+		{"terraform/*/qa", "terraform/akeyless/prod/apps/x", false},
+		{"nonprod", "nonprod", true},
+		{"nonprod", "nonprod/us-east-1/qa/mysql", true},
+		{"nonprod", "nonprod-x", false},
+		{"prod/**", "prod/eu-west-1/app", true},
+		{"*/*/app", "a/b/app", true},
+	}
+	for _, c := range cases {
+		if got := dirGlobMatches(c.pattern, c.path); got != c.want {
+			t.Errorf("dirGlobMatches(%q, %q) = %v, want %v", c.pattern, c.path, got, c.want)
+		}
+	}
+}
+
+func TestGenerateCLIEngineFilterDirGlob(t *testing.T) {
+	terragruntCLIOrSkip(t)
+	runTest(t, "golden/engine_cli_filter_dirglob.yaml", []string{
+		"--engine", "cli",
+		"--root", "../test_examples/chained_dependencies",
+		"--filter", "depender*",
+	})
+}
