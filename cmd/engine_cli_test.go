@@ -236,9 +236,19 @@ func TestCLIOrderingHandlesBackslashEdges(t *testing.T) {
 		}
 	}
 
-	oldEOG, oldDO, oldPN := executionOrderGroups, dependsOn, createProjectName
-	defer func() { executionOrderGroups, dependsOn, createProjectName = oldEOG, oldDO, oldPN }()
+	oldEOG, oldDO, oldPN, oldCascade := executionOrderGroups, dependsOn, createProjectName, cascadeDependencies
+	oldIgnoreParent := ignoreParentTerragrunt
+	defer func() {
+		executionOrderGroups, dependsOn, createProjectName, cascadeDependencies = oldEOG, oldDO, oldPN, oldCascade
+		ignoreParentTerragrunt = oldIgnoreParent
+	}()
 	executionOrderGroups, dependsOn, createProjectName = true, true, true
+	// direct-edge depends_on keeps assertions simple; cascaded closure is
+	// covered by the contract suite
+	cascadeDependencies = false
+	// synthetic components have no real terragrunt.hcl on disk: skip the
+	// parent-detection probe, it is covered by the contract suite
+	ignoreParentTerragrunt = false
 
 	projects, err := cliEngineProjects(components, ".")
 	if err != nil {
