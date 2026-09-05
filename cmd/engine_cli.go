@@ -237,6 +237,55 @@ func componentWatchFiles(c cliComponent, componentDir string) []string {
 	return watch
 }
 
+// isProjectCandidate statically decides whether a config file could be a
+// real project (mirroring the library engine's parent-detection rule):
+// either a terraform block with a source, or any include block pointing up.
+func hasTerraformSource(configFile string) bool {
+	raw, err := readFileAsString(configFile)
+	if err != nil {
+		return false
+	}
+	// Library rule: a file with an include block is a child, not a parent —
+	// keep it even without a terraform source.
+	for _, line := range strings.Split(raw, "\n") {
+		trim := strings.TrimSpace(line)
+		if strings.HasPrefix(trim, "include") && strings.Contains(trim, "{") {
+			return true
+		}
+	}
+	// cheap text shape: `terraform { ... source = ... }` — matches any
+	// reasonable whitespace/comment layout without an HCL dance
+	// Track brace depth so nested blocks (extra_arguments etc.) inside
+	// `terraform {}` do not terminate the scan early.
+	inTerraform := false
+	depth := 0
+	for _, line := range strings.Split(raw, "\n") {
+		trim := strings.TrimSpace(line)
+		if strings.HasPrefix(trim, "//") || strings.HasPrefix(trim, "#") {
+			continue
+		}
+		if inTerraform {
+			if strings.HasPrefix(trim, "source") && strings.Contains(trim, "=") {
+				return true
+			}
+		}
+		opens := strings.Count(trim, "{")
+		closes := strings.Count(trim, "}")
+		if !inTerraform && strings.HasPrefix(trim, "terraform") && opens > 0 {
+			inTerraform = true
+			depth = opens - closes
+			continue
+		}
+		if inTerraform {
+			depth += opens - closes
+			if depth <= 0 {
+				break
+			}
+		}
+	}
+	return false
+}
+
 // stackSourceProbe statically reads only the `source` attributes of unit and
 // stack blocks from a terragrunt.stack.hcl file. Discovery is the CLI's job,
 // but the CLI reports no "this stack depends on its unit sources" edges, so
@@ -352,10 +401,49 @@ func transitiveDependencies(components []cliComponent, direct map[string][]strin
 	return result
 }
 
+// normalizeFilterPaths re-expresses --filter entries relative to the repo
+// root, so the same pattern works whether the caller passed root-relative
+// names ("terraform/*/qa"), absolute paths, or cwd-relative globs (the
+// library engine's pre-existing form).
+func normalizeFilterPaths(filters []string, root string) []string {
+	out := make([]string, 0, len(filters))
+	absRoot, _ := filepath.Abs(root)
+	for _, f := range filters {
+		if filepath.IsAbs(f) || strings.HasPrefix(f, ".") {
+			abs, err := filepath.Abs(f)
+			if err == nil {
+				if rel, err := filepath.Rel(absRoot, abs); err == nil && !strings.HasPrefix(rel, "..") {
+					out = append(out, filepath.ToSlash(rel))
+					continue
+				}
+			}
+		}
+		out = append(out, filepath.ToSlash(f))
+	}
+	return out
+}
+
 // cliEngineProjects converts discovered components into Atlantis projects.
 func cliEngineProjects(components []cliComponent, root string) ([]AtlantisProject, error) {
+	// Same skip-parents default as the library engine: configs with no
+	// terraform source (root includes, wrapper files) are not projects.
+	if ignoreParentTerragrunt {
+		in := components[:0]
+		for _, c := range components {
+			if c.Type == "stack" {
+				in = append(in, c)
+				continue
+			}
+			cfg := filepath.Join(root, filepath.FromSlash(c.Path), "terragrunt.hcl")
+			if hasTerraformSource(cfg) {
+				in = append(in, c)
+			}
+		}
+		components = in
+	}
+
 	before := len(components)
-	components = filterComponents(components, filterPaths)
+	components = filterComponents(components, normalizeFilterPaths(filterPaths, root))
 	if len(filterPaths) > 0 && len(components) == 0 && before > 0 {
 		return nil, cliEngineError("--filter %q matched no discovered components", strings.Join(filterPaths, ", "))
 	}
@@ -432,11 +520,16 @@ func cliEngineProjects(components []cliComponent, root string) ([]AtlantisProjec
 		projects = append(projects, project)
 	}
 
-	// Ordering features work straight off the discovered dependency graph —
-	// the cli engine has exact edges, so it does not need to re-derive them
-	// from when_modified globs like the library engine does.
+	// Ordering features work off the discovered dependency graph directly —
+	// no round-trip through when_modified geometries. depends_on honors the
+	// cascade flag exactly like the library engine does: transitive closure
+	// by default, direct edges only when cascading is off.
 	if executionOrderGroups || dependsOn {
-		applyCLIOrdering(projects, direct)
+		edges := direct
+		if cascadeDependencies {
+			edges = transitiveDependencies(components, direct)
+		}
+		applyCLIOrdering(projects, edges)
 	}
 
 	if executionOrderGroups {
