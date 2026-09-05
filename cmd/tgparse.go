@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"io"
 
 	"github.com/gruntwork-io/terragrunt/pkg/config"
 	"github.com/gruntwork-io/terragrunt/pkg/log"
@@ -9,13 +10,18 @@ import (
 	"github.com/gruntwork-io/terragrunt/pkg/options"
 )
 
-// quietTerragruntLogger returns a Terragrunt logger that only surfaces
-// errors. The generator writes atlantis.yaml to stdout, so library chatter
-// at info/warn level must stay out of the way. A bare formatter is still
+// quietTerragruntLogger is the logger handed to terragrunt's parser. Its
+// diagnostics writer surfaces every HCL eval hiccup at its default ERROR
+// level — in real repositories, catalog/template files evaluated outside
+// their runtime context (get_path_from_repo_root() arithmetic on short
+// paths, read_terragrunt_config into non-existent parents, sops locks)
+// produce an unreadable wall of "Error: Invalid index" spam. Nothing
+// user-actionable travels this channel: failures reach users as returned Go
+// errors with positions (we log those ourselves). A bare formatter is still
 // required: terragrunt's parser options dereference Logger.Formatter().
 func quietTerragruntLogger() log.Logger {
 	return log.New(
-		log.WithLevel(log.ErrorLevel),
+		log.WithOutput(io.Discard),
 		log.WithFormatter(format.NewFormatter(format.NewBareFormatPlaceholders())),
 	)
 }
