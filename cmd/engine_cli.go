@@ -185,7 +185,11 @@ func filterComponents(components []cliComponent, filters []string) []cliComponen
 // Plain directories never leave the fast path; glob patterns (incl. **)
 // compare at every ancestor level.
 func dirGlobMatches(pattern, path string) bool {
-	pattern = strings.TrimSuffix(filepath.ToSlash(pattern), "/")
+	// normalize BOTH inputs with raw replaces (never filepath.ToSlash: it is
+	// a no-op off-Windows, which turns "portable" code into host-dependent)
+	sep := func(s string) string { return strings.ReplaceAll(s, "\\", "/") }
+	pattern, path = strings.TrimSuffix(sep(pattern), "/"), sep(path)
+
 	if !strings.ContainsAny(pattern, "*?[\\") {
 		return path == pattern || strings.HasPrefix(path, pattern+"/")
 	}
@@ -194,11 +198,11 @@ func dirGlobMatches(pattern, path string) bool {
 		if matchGlob(pattern, d) {
 			return true
 		}
-		parent := filepath.Dir(d)
-		if parent == d || parent == "." {
+		idx := strings.LastIndexByte(d, '/')
+		if idx <= 0 {
 			return false
 		}
-		d = parent
+		d = d[:idx]
 	}
 }
 
