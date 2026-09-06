@@ -448,6 +448,53 @@ func cliEngineProjects(components []cliComponent, root string) ([]AtlantisProjec
 		return nil, cliEngineError("--filter %q matched no discovered components", strings.Join(filterPaths, ", "))
 	}
 
+	// Stack catalog sources must not become their own projects (they're
+	// consumed via stacks, not planned standalone) — same rule the library
+	// engine applies via IsStackSourceDir.
+	sourceDirs := map[string]bool{}
+	for _, c := range components {
+		if c.Type != "stack" {
+			continue
+		}
+		stackFile := filepath.Join(root, c.Path, "terragrunt.stack.hcl")
+		for _, src := range stackLocalSourceDirs(stackFile, root) {
+			sourceDirs[src] = true
+		}
+	}
+
+	// Stack-dir containment: units materialized by `terragrunt stack
+	// generate` with no_dot_terragrunt_stack live directly inside the stack's
+	// directory and must not become their own projects.
+	stackDirs := []string{}
+	for _, c := range components {
+		if c.Type == "stack" {
+			stackDirs = append(stackDirs, c.Path)
+		}
+	}
+	if len(stackDirs) > 0 {
+		filtered := components[:0]
+		for _, c := range components {
+			if c.Type == "stack" {
+				filtered = append(filtered, c)
+				continue
+			}
+			owned := false
+			for _, sd := range stackDirs {
+				if strings.HasPrefix(c.Path, sd+"/") {
+					owned = true
+					break
+				}
+			}
+			if !owned && c.Type == "unit" && sourceDirs[c.Path] {
+				owned = true
+			}
+			if !owned {
+				filtered = append(filtered, c)
+			}
+		}
+		components = filtered
+	}
+
 	direct := make(map[string][]string, len(components))
 	for _, c := range components {
 		direct[c.Path] = c.Dependencies
@@ -624,6 +671,11 @@ func generateProjectsWithCLIEngine(root string) ([]AtlantisProject, error) {
 	ctx := context.Background()
 	components, err := runTerragruntFind(ctx, bin, root)
 	if err != nil {
+		// terragrunt < v1 errors here (no --reading support, different
+		// discovery shapes, empty stderr); say exactly who to blame.
+		if major, ok := terragruntCLIMajor(bin); ok && major < 1 {
+			return nil, cliEngineError("terragrunt v0.%d binary incompatible with the cli engine (need terragrunt v1+); use --engine=library or install terragrunt v1", major)
+		}
 		return nil, err
 	}
 

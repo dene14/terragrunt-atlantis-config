@@ -454,6 +454,28 @@ func (sm *StackManager) GetStackForModule(module string) []string {
 	return sm.moduleToStacks[sm.normalizeModuleDir(module)]
 }
 
+// IsStackOwnedDir reports whether the module dir lives inside a stack's
+// directory but isn't the stack file's own directory. When a stack is
+// generated with `no_dot_terragrunt_stack`, its units materialize as plain
+// subdirectories (e.g. <stack>/main, <stack>/peering) — generated runtime
+// content, not individually plannable projects.
+//
+// FIXME(decision): this rule assumes stacks never intentionally host
+// mediating terragrunt.hcl files for unrelated purposes. Terragrunt's own
+// stack dirs convention is exactly that, so the rule is safe per contract.
+func (sm *StackManager) IsStackOwnedDir(module string) bool {
+	dir := sm.normalizeModuleDir(module)
+	for _, stack := range sm.stacks {
+		if stack.Name == "" {
+			continue
+		}
+		if strings.HasPrefix(dir, stack.Name+"/") {
+			return true
+		}
+	}
+	return false
+}
+
 // IsStackSourceDir reports whether the module dir is a directory used as a
 // local `source` by some stack's units (a catalog/template directory). Such
 // directories are watched by the stack project but do not get individual

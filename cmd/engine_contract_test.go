@@ -86,6 +86,10 @@ type contractCase struct {
 	name string
 	root string
 	args []string
+	// rootUnderIssues points into test_examples_issues rather than
+	// test_examples (the fixture mirrors a production topology, which we
+	// don't want appearing inside high-level whole-tree goldens)
+	rootUnderIssues bool
 }
 
 var engineContractCases = []contractCase{
@@ -98,12 +102,19 @@ var engineContractCases = []contractCase{
 	// the production shape from the incident: a directory mid-tree selected by glob
 	{name: "mid-tree dir glob filter", root: "terragrunt-infrastructure-live-example", args: []string{"--filter", "../test_examples/terragrunt-infrastructure-live-example/non-prod/us-east-1"}},
 	{name: "mid-tree dir glob wildcard at top", root: "terragrunt-infrastructure-live-example", args: []string{"--filter", "../test_examples/terragrunt-infrastructure-live-example/*/us-east-1"}},
+	// stack file + pre-generated unit dirs on disk + catalog unit dir on
+	// disk must collapse into exactly ONE project (the stack), on both engines
+	{name: "stack keeps generated units invisible", root: "stack_generated_units", args: []string{"--enable-stacks"}, rootUnderIssues: true},
 }
 
 func TestEngineContractIdenticalProjectSets(t *testing.T) {
 	for _, tc := range engineContractCases {
 		t.Run(tc.name, func(t *testing.T) {
-			rootFlag := []string{"--root", "../test_examples/" + tc.root}
+			base := "../test_examples/"
+			if tc.rootUnderIssues {
+				base = "../test_examples_issues/"
+			}
+			rootFlag := []string{"--root", base + tc.root}
 			args := append(rootFlag, tc.args...)
 
 			libCfg := runEngineContract(t, engineLibrary, args)

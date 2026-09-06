@@ -941,6 +941,9 @@ func main(cmd *cobra.Command, args []string) error {
 							if len(stacks) > 0 {
 								skipProject = true
 								log.Debugf("Skipping regular project for %s (belongs to stack(s): %v)", relPath, stacks)
+							} else if stackMgr.IsStackOwnedDir(relPath) {
+								skipProject = true
+								log.Debugf("Skipping regular project %s (generated content inside stack dir)", relPath)
 							} else if stackMgr.IsStackSourceDir(relPath) {
 								skipProject = true
 								log.Debugf("Skipping regular project for %s (unit source catalog of a stack)", relPath)
@@ -955,21 +958,21 @@ func main(cmd *cobra.Command, args []string) error {
 						return err
 					}
 
-				errGroup.Go(func() error {
-					defer sem.Release(1)
-					project, err := createProject(ctx, terragruntPath)
-					if err != nil {
-						// Our own locals-annotation errors stay fatal;
-						// terragrunt-side eval failures degrade to a skipped
-						// project + warning, so one bad leaf can't sink a
-						// 400-module monorepo.
-						if isMarkerError(err) {
-							return err
+					errGroup.Go(func() error {
+						defer sem.Release(1)
+						project, err := createProject(ctx, terragruntPath)
+						if err != nil {
+							// Our own locals-annotation errors stay fatal;
+							// terragrunt-side eval failures degrade to a skipped
+							// project + warning, so one bad leaf can't sink a
+							// 400-module monorepo.
+							if isMarkerError(err) {
+								return err
+							}
+							log.Warnf("Skipping %s: %v", terragruntPath, err)
+							failedProjects.Add(1)
+							return nil
 						}
-						log.Warnf("Skipping %s: %v", terragruntPath, err)
-						failedProjects.Add(1)
-						return nil
-					}
 						// if project and err are nil then skip this project
 						if err == nil && project == nil {
 							return nil
