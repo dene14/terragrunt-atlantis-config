@@ -5,14 +5,6 @@ projects:
 - autoplan:
     enabled: false
     when_modified:
-    - '*.hcl'
-    - '*.tf*'
-    - ../vpc/**/*.hcl
-    - ../vpc/**/*.tf*
-  dir: catalog/db
-- autoplan:
-    enabled: false
-    when_modified:
     - '**/*.hcl'
     - '**/*.tf*'
     - '*.hcl'
@@ -20,12 +12,6 @@ projects:
     - ../db/**/*.hcl
     - ../db/**/*.tf*
   dir: catalog/mini-stack
-- autoplan:
-    enabled: false
-    when_modified:
-    - '*.hcl'
-    - '*.tf*'
-  dir: catalog/vpc
 - autoplan:
     enabled: false
     when_modified:
