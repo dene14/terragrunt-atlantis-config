@@ -1,0 +1,21 @@
+automerge: false
+parallel_apply: true
+parallel_plan: true
+projects:
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - '**/*.hcl'
+    - '**/*.tf*'
+    - ../../units/vpc/**/*.hcl
+    - ../../units/vpc/**/*.tf*
+  dir: live/prod
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+  dir: live/prod/local-addons
+version: 3

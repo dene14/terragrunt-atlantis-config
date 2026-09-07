@@ -447,12 +447,18 @@ func ConvertStackHclToStacks(definitions []StackHclDefinition, gitRoot string) [
 
 		members := []string{}
 		unitSources := []string{}
+		declaredPaths := []string{}
 
 		// processBlock records member and/or source directories for a unit or
 		// nested stack block.
 		processBlock := func(source, path *string) {
 			if path != nil {
 				unitDir := filepath.Join(stackDir, *path)
+				// Do NOT require the dir to exist — stack-run content is
+				// created later; ownership must be known up front.
+				if rel, ok := relDirInsideRepo(unitDir); ok {
+					addUnique(&declaredPaths, rel)
+				}
 				if _, err := os.Stat(filepath.Join(unitDir, "terragrunt.hcl")); err == nil {
 					if rel, ok := relDirInsideRepo(unitDir); ok {
 						addUnique(&members, rel)
@@ -492,12 +498,13 @@ func ConvertStackHclToStacks(definitions []StackHclDefinition, gitRoot string) [
 		}
 
 		stacks = append(stacks, Stack{
-			Name:         relStackDir,
-			Description:  description,
-			Modules:      members,
-			UnitSources:  unitSources,
-			Dependencies: []string{},
-			Source:       filepath.ToSlash(relStackFile),
+			Name:          relStackDir,
+			Description:   description,
+			Modules:       members,
+			UnitSources:   unitSources,
+			DeclaredPaths: declaredPaths,
+			Dependencies:  []string{},
+			Source:        filepath.ToSlash(relStackFile),
 		})
 	}
 

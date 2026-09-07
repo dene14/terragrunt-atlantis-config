@@ -286,6 +286,47 @@ func hasTerraformSource(configFile string) bool {
 	return false
 }
 
+// stackDeclaredPaths returns every literal `path` of unit/stack blocks in a
+// terragrunt.stack.hcl file (slash-normalized relative to the stack file's
+// dir). Used to decide stack-dir containment precisely.
+func stackDeclaredPaths(stackFile string) []string {
+	type pathProbe struct {
+		Units []struct {
+			Name string  `hcl:"name,label"`
+			Path *string `hcl:"path,attr"`
+		} `hcl:"unit,block"`
+		Stacks []struct {
+			Name string  `hcl:"name,label"`
+			Path *string `hcl:"path,attr"`
+		} `hcl:"stack,block"`
+	}
+
+	raw, err := readFileAsString(stackFile)
+	if err != nil {
+		return nil
+	}
+	file, diags := hclparse.NewParser().ParseHCL([]byte(raw), stackFile)
+	if diags != nil && diags.HasErrors() {
+		return nil
+	}
+
+	probe := pathProbe{}
+	_ = gohcl.DecodeBody(file.Body, nil, &probe)
+
+	out := []string{}
+	for _, u := range probe.Units {
+		if u.Path != nil && *u.Path != "" {
+			out = append(out, filepath.ToSlash(filepath.Clean(*u.Path)))
+		}
+	}
+	for _, s := range probe.Stacks {
+		if s.Path != nil && *s.Path != "" {
+			out = append(out, filepath.ToSlash(filepath.Clean(*s.Path)))
+		}
+	}
+	return out
+}
+
 // stackSourceProbe statically reads only the `source` attributes of unit and
 // stack blocks from a terragrunt.stack.hcl file. Discovery is the CLI's job,
 // but the CLI reports no "this stack depends on its unit sources" edges, so
@@ -465,14 +506,22 @@ func cliEngineProjects(components []cliComponent, root string) ([]AtlantisProjec
 	// Stack-dir containment: units materialized by `terragrunt stack
 	// generate` with no_dot_terragrunt_stack live directly inside the stack's
 	// directory and must not become their own projects.
+	// Stack-owned dirs are exactly the dirs named by unit/stack `path`
+	// attributes (usually the stack-generate targets). Anything else inside
+	// the stack dir is a user-side local addition and must remain visible.
 	stackDirs := []string{}
 	for _, c := range components {
-		if c.Type == "stack" {
-			stackDirs = append(stackDirs, c.Path)
+		if c.Type != "stack" {
+			continue
+		}
+		stackFile := filepath.Join(root, c.Path, "terragrunt.stack.hcl")
+		declared := stackDeclaredPaths(stackFile)
+		for _, p := range declared {
+			stackDirs = append(stackDirs, c.Path+"/"+p)
 		}
 	}
 	if len(stackDirs) > 0 {
-		filtered := components[:0]
+		filtered := make([]cliComponent, 0, len(components))
 		for _, c := range components {
 			if c.Type == "stack" {
 				filtered = append(filtered, c)
@@ -480,7 +529,7 @@ func cliEngineProjects(components []cliComponent, root string) ([]AtlantisProjec
 			}
 			owned := false
 			for _, sd := range stackDirs {
-				if strings.HasPrefix(c.Path, sd+"/") {
+				if c.Path == sd || strings.HasPrefix(c.Path, sd+"/") {
 					owned = true
 					break
 				}

@@ -31,6 +31,12 @@ type Stack struct {
 	// when_modified patterns and still get normal projects of their own.
 	UnitSources []string
 
+	// Directories (relative to gitRoot) named by `path` attributes of this
+	// stack's unit/stack blocks. These are stack-owned regardless of whether
+	// they exist yet (they appear when `terragrunt stack generate` runs, e.g.
+	// with no_dot_terragrunt_stack layouts).
+	DeclaredPaths []string
+
 	// Glob patterns (relative to gitRoot) used to assign modules to this
 	// stack. Only populated for stacks from an external definition file.
 	Include []string
@@ -454,23 +460,24 @@ func (sm *StackManager) GetStackForModule(module string) []string {
 	return sm.moduleToStacks[sm.normalizeModuleDir(module)]
 }
 
-// IsStackOwnedDir reports whether the module dir lives inside a stack's
-// directory but isn't the stack file's own directory. When a stack is
-// generated with `no_dot_terragrunt_stack`, its units materialize as plain
-// subdirectories (e.g. <stack>/main, <stack>/peering) — generated runtime
-// content, not individually plannable projects.
-//
-// FIXME(decision): this rule assumes stacks never intentionally host
-// mediating terragrunt.hcl files for unrelated purposes. Terragrunt's own
-// stack dirs convention is exactly that, so the rule is safe per contract.
+// IsStackOwnedDir reports whether the module dir is inside a stack's own
+// declared content paths — the directories named by the stack file's
+// unit/stack `path` attributes. Those paths exist only after `terragrunt
+// stack generate` materializes them (e.g. with no_dot_terragrunt_stack), so
+// they must not become their own Atlantis projects. Directories that merely
+// sit inside the stack's dir without being declared in the stack file are
+// NOT stack-owned (intentional local additions keep their own projects).
 func (sm *StackManager) IsStackOwnedDir(module string) bool {
 	dir := sm.normalizeModuleDir(module)
 	for _, stack := range sm.stacks {
 		if stack.Name == "" {
 			continue
 		}
-		if strings.HasPrefix(dir, stack.Name+"/") {
-			return true
+		for _, p := range stack.DeclaredPaths {
+			owned := stack.Name + "/" + p
+			if dir == owned || strings.HasPrefix(dir, owned+"/") {
+				return true
+			}
 		}
 	}
 	return false
