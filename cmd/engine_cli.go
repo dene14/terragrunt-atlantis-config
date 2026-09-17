@@ -479,10 +479,11 @@ func cliEngineProjects(components []cliComponent, root string) ([]AtlantisProjec
 		for _, c := range components {
 			// A component is stack-owned when it is a strict subtree of a
 			// stack's directory. This folds classic modules AND nested /
-			// generated terragrunt.stack.hcl files (e.g. qa-rise/vpc from a
-			// nested `stack "vpc"` block) into the enclosing stack project:
-			// `terragrunt stack run` plans them all. Only top-level stacks
-			// (whose own dir matches no other stack as an ancestor) survive.
+			// generated terragrunt.stack.hcl files (e.g. a parent stack's
+			// nested `stack "vpc"` materializing vpc/terragrunt.stack.hcl)
+			// into the enclosing stack project: `terragrunt stack run` plans
+			// them all. Only top-level stacks (whose own dir matches no other
+			// stack as an ancestor) survive.
 			owned := false
 			for _, sd := range stackDirs {
 				if strings.HasPrefix(c.Path, sd+"/") {
