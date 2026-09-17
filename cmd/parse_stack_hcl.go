@@ -624,32 +624,13 @@ func EnrichStackWithUnitDetails(stack *Stack, def StackHclDefinition, gitRoot st
 		extra = append(extra, entry)
 	}
 
-	for _, unit := range def.Units {
-		if unit.Path == nil {
-			continue
-		}
-		unitDir := filepath.Clean(filepath.Join(stackDir, *unit.Path))
-		anchorFile := filepath.Join(unitDir, "terragrunt.hcl")
-
-		// The config file to read: the live unit dir if it exists,
-		// otherwise the unit's source directory (catalog).
-		configFile := anchorFile
-		if _, err := os.Stat(configFile); err != nil {
-			if unit.Source == nil {
-				continue
-			}
-			sourceDir := *unit.Source
-			if !filepath.IsAbs(sourceDir) {
-				sourceDir = filepath.Join(stackDir, sourceDir)
-			}
-			configFile = filepath.Join(sourceDir, "terragrunt.hcl")
-			if _, err := os.Stat(configFile); err != nil {
-				continue
-			}
-		}
-
+	// processConfig reads one unit config and records the watch targets its
+	// include chains, dependency blocks and local terraform module sources
+	// imply. Dependencies inside the stack's own declared unit dirs are
+	// ordered by `terragrunt stack run` and skipped.
+	processConfig := func(configFile, anchorFile string) {
 		paths := anchoredUnitWatchPaths{}
-		parseAnchoredUnitConfig(filepath.Clean(configFile), anchorFile, gitRoot, map[string]bool{}, &paths)
+		parseAnchoredUnitConfig(filepath.Clean(configFile), filepath.Clean(anchorFile), gitRoot, map[string]bool{}, &paths)
 
 		for _, includeFile := range paths.includes {
 			addUnique(includeFile)
@@ -657,7 +638,6 @@ func EnrichStackWithUnitDetails(stack *Stack, def StackHclDefinition, gitRoot st
 		for _, tfDir := range paths.tfDirs {
 			addUnique(filepath.Join(tfDir, "*.tf*"))
 		}
-
 		for _, depDir := range paths.deps {
 			depDir = filepath.Clean(depDir)
 			if unitDirs[depDir] {
@@ -693,6 +673,62 @@ func EnrichStackWithUnitDetails(stack *Stack, def StackHclDefinition, gitRoot st
 			}
 		}
 	}
+
+	// The stack's declared units: read from the generated dir if it exists,
+	// otherwise from the unit's source directory (catalog).
+	for _, unit := range def.Units {
+		if unit.Path == nil {
+			continue
+		}
+		unitDir := filepath.Clean(filepath.Join(stackDir, *unit.Path))
+		anchorFile := filepath.Join(unitDir, "terragrunt.hcl")
+
+		// The config file to read: the live unit dir if it exists,
+		// otherwise the unit's source directory (catalog).
+		configFile := anchorFile
+		if _, err := os.Stat(configFile); err != nil {
+			if unit.Source == nil {
+				continue
+			}
+			sourceDir := *unit.Source
+			if !filepath.IsAbs(sourceDir) {
+				sourceDir = filepath.Join(stackDir, sourceDir)
+			}
+			configFile = filepath.Join(sourceDir, "terragrunt.hcl")
+			if _, err := os.Stat(configFile); err != nil {
+				continue
+			}
+		}
+		processConfig(configFile, anchorFile)
+	}
+
+	// Every OTHER unit living under the stack directory is planned by
+	// `terragrunt stack run` too (classic modules coexisting with the stack).
+	// They no longer get their own Atlantis projects, so their include
+	// chains, external dependencies and module sources must trigger the stack
+	// project.
+	_ = filepath.Walk(stackDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			switch info.Name() {
+			case ".terragrunt-stack", ".terragrunt-cache", ".git":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if info.Name() != "terragrunt.hcl" {
+			return nil
+		}
+		dir := filepath.Clean(filepath.Dir(path))
+		if unitDirs[dir] {
+			// declared unit, already processed above
+			return nil
+		}
+		processConfig(path, path)
+		return nil
+	})
 
 	stack.ExtraWatchPaths = extra
 }

@@ -212,8 +212,8 @@ func componentWatchFiles(c cliComponent, componentDir string) []string {
 	watch := []string{"*.hcl", "*.tf*"}
 
 	if c.Type == "stack" {
-		// A stack watches its whole subtree: unit references inside
-		// terragrunt.stack.hcl may point anywhere underneath it.
+		// A stack watches its whole directory subtree: `terragrunt stack run`
+		// plans every unit under the stack dir (classic modules included).
 		watch = append(watch, "**/*.hcl", "**/*.tf*")
 	}
 
@@ -284,47 +284,6 @@ func hasTerraformSource(configFile string) bool {
 		}
 	}
 	return false
-}
-
-// stackDeclaredPaths returns every literal `path` of unit/stack blocks in a
-// terragrunt.stack.hcl file (slash-normalized relative to the stack file's
-// dir). Used to decide stack-dir containment precisely.
-func stackDeclaredPaths(stackFile string) []string {
-	type pathProbe struct {
-		Units []struct {
-			Name string  `hcl:"name,label"`
-			Path *string `hcl:"path,attr"`
-		} `hcl:"unit,block"`
-		Stacks []struct {
-			Name string  `hcl:"name,label"`
-			Path *string `hcl:"path,attr"`
-		} `hcl:"stack,block"`
-	}
-
-	raw, err := readFileAsString(stackFile)
-	if err != nil {
-		return nil
-	}
-	file, diags := hclparse.NewParser().ParseHCL([]byte(raw), stackFile)
-	if diags != nil && diags.HasErrors() {
-		return nil
-	}
-
-	probe := pathProbe{}
-	_ = gohcl.DecodeBody(file.Body, nil, &probe)
-
-	out := []string{}
-	for _, u := range probe.Units {
-		if u.Path != nil && *u.Path != "" {
-			out = append(out, filepath.ToSlash(filepath.Clean(*u.Path)))
-		}
-	}
-	for _, s := range probe.Stacks {
-		if s.Path != nil && *s.Path != "" {
-			out = append(out, filepath.ToSlash(filepath.Clean(*s.Path)))
-		}
-	}
-	return out
 }
 
 // stackSourceProbe statically reads only the `source` attributes of unit and
@@ -503,22 +462,17 @@ func cliEngineProjects(components []cliComponent, root string) ([]AtlantisProjec
 		}
 	}
 
-	// Stack-dir containment: units materialized by `terragrunt stack
-	// generate` with no_dot_terragrunt_stack live directly inside the stack's
-	// directory and must not become their own projects.
-	// Stack-owned dirs are exactly the dirs named by unit/stack `path`
-	// attributes (usually the stack-generate targets). Anything else inside
-	// the stack dir is a user-side local addition and must remain visible.
+	// Stack-dir containment: a stack owns its ENTIRE directory subtree — no
+	// discovery deeper than a terragrunt.stack.hcl should happen, because
+	// `terragrunt stack run` plans every unit under the stack dir (classic
+	// modules included). Anything under a stack component's directory is
+	// stack-owned and must not become its own project.
 	stackDirs := []string{}
 	for _, c := range components {
 		if c.Type != "stack" {
 			continue
 		}
-		stackFile := filepath.Join(root, c.Path, "terragrunt.stack.hcl")
-		declared := stackDeclaredPaths(stackFile)
-		for _, p := range declared {
-			stackDirs = append(stackDirs, c.Path+"/"+p)
-		}
+		stackDirs = append(stackDirs, c.Path)
 	}
 	if len(stackDirs) > 0 {
 		filtered := make([]cliComponent, 0, len(components))
@@ -749,5 +703,17 @@ func generateProjectsWithCLIEngine(root string) ([]AtlantisProject, error) {
 func warnLibraryEngineDeprecation() {
 	log.Warnf(
 		"deprecated: the embedded terragrunt library engine (--engine=library) is frozen at terragrunt v0.99.x and will be removed in v1.27 of terragrunt-atlantis-config. Migrate to the CLI engine: upgrade terragrunt to v1.x (or run --engine=cli with a v1.x binary on PATH); --engine=auto does this automatically once terragrunt v1+ is installed.",
+	)
+}
+
+// warnStacksDeprecation heads users off the stacks flag. Stacks support (via
+// terragrunt.stack.hcl + `terragrunt stack run`) is native terragrunt 1.x
+// behavior: the fork only needs to know that a stack owns its whole directory
+// subtree so no standalone projects are emitted underneath it. That logic is
+// moving into the CLI engine's native discovery and the flag is slated for
+// removal alongside the library engine in v1.27.
+func warnStacksDeprecation() {
+	log.Warnf(
+		"deprecated: --enable-stacks will be removed in v1.27 of terragrunt-atlantis-config, together with the library engine. With terragrunt v1.x the CLI engine handles stacks natively (a terragrunt.stack.hcl owns its whole directory subtree); run with --engine=cli and a terragrunt v1+ binary to be ready.",
 	)
 }

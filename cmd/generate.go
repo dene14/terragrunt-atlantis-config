@@ -837,6 +837,9 @@ func main(cmd *cobra.Command, args []string) error {
 	if resolvedEngine == engineLibrary {
 		warnLibraryEngineDeprecation()
 	}
+	if enableStacks {
+		warnStacksDeprecation()
+	}
 	var failedProjects atomic.Int64
 	if resolvedEngine == engineCLI {
 		cliProjects, err := generateProjectsWithCLIEngine(gitRoot)

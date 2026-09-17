@@ -18,9 +18,17 @@ Flags:
 
 | Flag                      | Description                                                                                |
 | ------------------------- | ------------------------------------------------------------------------------------------ |
-| `--enable-stacks`         | Enable stack discovery and stack project generation                                        |
+| `--enable-stacks`         | Enable stack discovery and stack project generation (**deprecated**, see below)             |
 | `--stack-workflow`        | Workflow for stack projects (falls back to `--workflow`)                                   |
 | `--stack-definition-file` | Additional YAML/JSON file declaring stacks, relative to `--root` unless absolute           |
+
+> **Deprecation**: `--enable-stacks` will be removed in **v1.27** of terragrunt-atlantis-config,
+> together with `--engine=library`. Stack handling is native terragrunt 1.x behavior — the fork
+> only needs to know that a `terragrunt.stack.hcl` owns its whole directory subtree so no
+> standalone projects are emitted underneath it — and that logic is moving into the CLI engine's
+> native discovery. Run with `--engine=cli` and a terragrunt v1+ binary to be ready. Until then,
+> the behavior described on this page is gated behind `--enable-stacks`; without the flag the
+> output is byte-identical to upstream behavior.
 
 Global flags `--autoplan`, `--terraform-version`, `--create-workspace`, `--create-project-name`
 and `--workflow` apply to stack projects the same way they apply to regular projects.
@@ -82,6 +90,14 @@ Semantics:
   Directories referenced through a unit's local `source` (catalogs like `units/vpc`) are treated
   as templates: they are watched via `when_modified` but get no Atlantis project of their own
   (planning a template directory in-place would be meaningless).
+- **A stack owns its whole directory subtree**: `terragrunt stack run` plans every terragrunt unit
+  under the stack directory — the declared units *and* any classic module that coexists there
+  (e.g. a resource_group composing reusable vpc/eks stacks next to apps/databases). Therefore no
+  discovery deeper than a `terragrunt.stack.hcl` happens with `--enable-stacks`: everything under
+  the stack dir belongs to the single stack project and gets no individual Atlantis project. The
+  stack project's `when_modified` covers the whole stack dir (`**/*.hcl`) plus out-of-tree sources
+  and the dependencies of every unit under it (classic modules included), so a change anywhere in
+  the stack's tree re-triggers it.
 - **Dependency tracking**: each unit's config is evaluated anchored at the unit's *generated*
   location (as if `terragrunt stack generate` had already run). From it:
   - `include` chains (e.g. `find_in_parent_folders` of shared root env/account files) are
@@ -207,6 +223,10 @@ matters for the bootstrapping window.
 
 - One Atlantis project per stack; per-unit granularity via generated `.terragrunt-stack`
   directories is deliberately not produced (those directories do not exist on a fresh clone).
+- Classic modules under a stack dir are planned by the stack and get no project of their own;
+  their direct dependencies and module sources trigger the stack, but dependencies reached
+  transitively through a *generated* unit (e.g. an app depending on a stack unit that depends on
+  a shared catalog unit) may not be tracked until the generated unit exists on disk.
 - Explicit `depends_on` between stack projects requires the definition file.
 - `locals { extra_atlantis_dependencies = ... }` inside unit configs are not yet collected
   (upstream feature parity todo).
