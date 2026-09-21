@@ -304,3 +304,39 @@ func TestGenerateCLIEngineFilterDirGlob(t *testing.T) {
 		"--filter", "depender*",
 	})
 }
+
+func TestCLIExcludeExcludesPlan(t *testing.T) {
+	cases := []struct {
+		name string
+		ex   *cliExclude
+		want bool
+	}{
+		{"no exclude block", nil, false},
+		{"if false", &cliExclude{If: false, Actions: []string{"all"}}, false},
+		{"plan", &cliExclude{If: true, Actions: []string{"plan"}}, true},
+		{"all", &cliExclude{If: true, Actions: []string{"all"}}, true},
+		{"all_except_output", &cliExclude{If: true, Actions: []string{"all_except_output"}}, true},
+		{"apply only stays plannable", &cliExclude{If: true, Actions: []string{"apply"}}, false},
+		{"unknown action ignored", &cliExclude{If: true, Actions: []string{"nonsense"}}, false},
+		{"mixed picks up plan", &cliExclude{If: true, Actions: []string{"apply", "plan"}}, true},
+		{"empty actions", &cliExclude{If: true, Actions: nil}, false},
+		{"case and spacing tolerated", &cliExclude{If: true, Actions: []string{" ALL "}}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.ex.excludesPlan(); got != tc.want {
+				t.Fatalf("excludesPlan() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// A unit carrying an `exclude` block that covers plan must not become a
+// project. This is the CLI engine's counterpart to the library engine's
+// `atlantis_skip` local: terragrunt never exposes locals to external tools,
+// so opting a unit out of automation has to go through a block terragrunt
+// itself evaluates.
+func TestGenerateCLIEngineExclude(t *testing.T) {
+	terragruntCLIOrSkip(t)
+	runTest(t, "golden/engine_cli_exclude.yaml", []string{"--engine", "cli", "--root", "../test_examples/cli_exclude"})
+}
