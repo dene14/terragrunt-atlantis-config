@@ -118,6 +118,27 @@ projects:
     when_modified:
     - '*.hcl'
     - '*.tf*'
+    - ../root.hcl
+  dir: cli_exclude/excluded
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - ../root.hcl
+  dir: cli_exclude/excluded_apply_only
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - ../root.hcl
+  dir: cli_exclude/planned
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
   dir: different_workflow_names/defaultWorkflow
 - autoplan:
     enabled: false

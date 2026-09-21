@@ -46,10 +46,37 @@ var engine string
 
 // cliComponent is one entry of `terragrunt find --json` output.
 type cliComponent struct {
-	Type         string   `json:"type"` // "unit" or "stack"
-	Path         string   `json:"path"`
-	Dependencies []string `json:"dependencies"`
-	Reading      []string `json:"reading"`
+	Type         string      `json:"type"` // "unit" or "stack"
+	Path         string      `json:"path"`
+	Dependencies []string    `json:"dependencies"`
+	Reading      []string    `json:"reading"`
+	Exclude      *cliExclude `json:"exclude"`
+}
+
+// cliExclude is a component's resolved `exclude` block, as reported by
+// `terragrunt find --exclude`. A nil pointer means the component declares no
+// exclude block at all.
+type cliExclude struct {
+	If      bool     `json:"if"`
+	Actions []string `json:"actions"`
+}
+
+// excludesPlan reports whether this exclude block takes the component out of
+// a plan run. It mirrors `terragrunt find --queue-construct-as plan`:
+// "apply" leaves the component plannable, unrecognised actions are ignored,
+// and "all_except_output" still excludes it (the exception is about feeding
+// outputs to dependents, not about being planned in its own right).
+func (e *cliExclude) excludesPlan() bool {
+	if e == nil || !e.If {
+		return false
+	}
+	for _, a := range e.Actions {
+		switch strings.TrimSpace(strings.ToLower(a)) {
+		case "plan", "all", "all_except_output":
+			return true
+		}
+	}
+	return false
 }
 
 // cliEngineError is returned for any CLI engine failure with actionable text.
@@ -121,6 +148,7 @@ func runTerragruntFind(ctx context.Context, bin, root string) ([]cliComponent, e
 		"--format=json",
 		"--dependencies",
 		"--reading",
+		"--exclude",
 	}
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = root
@@ -441,6 +469,20 @@ func cliEngineProjects(components []cliComponent, root string) ([]AtlantisProjec
 		}
 		components = in
 	}
+
+	// Honour terragrunt's own `exclude` blocks. This is the CLI engine's
+	// equivalent of the library engine's `atlantis_skip` local: terragrunt
+	// never exposes locals to external tools, so a unit opting out of
+	// automation has to say so in a block terragrunt itself evaluates.
+	kept := components[:0]
+	for _, c := range components {
+		if c.Exclude.excludesPlan() {
+			log.Debugf("cli engine: %s excluded by its exclude block", c.Path)
+			continue
+		}
+		kept = append(kept, c)
+	}
+	components = kept
 
 	before := len(components)
 	components = filterComponents(components, normalizeFilterPaths(filterPaths, root))
