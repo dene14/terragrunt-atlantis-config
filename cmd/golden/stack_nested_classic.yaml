@@ -9,7 +9,7 @@ projects:
     - '*.tf*'
     - '**/*.hcl'
     - '**/*.tf*'
-    - ../../units/vpc/**/*.hcl
-    - ../../units/vpc/**/*.tf*
-  dir: live/prod
+    - ../catalog/vpc-stack/**/*.hcl
+    - ../catalog/vpc-stack/**/*.tf*
+  dir: live
 version: 3

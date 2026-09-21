@@ -218,7 +218,9 @@ func (sm *StackManager) GenerateStackProject(stack Stack) (*AtlantisProject, err
 		stackDir = "."
 	}
 
-	// autoplan when_modified patterns. The base patterns cover everything
+	// autoplan when_modified patterns. A stack owns its whole directory
+	// subtree: `terragrunt stack run` plans every unit under the stack dir
+	// (classic modules included), so the base patterns cover everything
 	// inside the stack directory; directories watched by this stack that
 	// live outside of it (e.g. a shared units catalog) are added as
 	// relative patterns.
@@ -246,7 +248,7 @@ func (sm *StackManager) GenerateStackProject(stack Stack) (*AtlantisProject, err
 	for _, dir := range watchedDirs {
 		absDir := filepath.Join(cleanGitRoot, filepath.FromSlash(dir))
 		rel, err := filepath.Rel(absStackDir, absDir)
-		if err != nil || rel == "." || rel == "" {
+		if err != nil || rel == "" || rel == "." {
 			continue
 		}
 		relSlash := filepath.ToSlash(rel)
@@ -463,24 +465,23 @@ func (sm *StackManager) GetStackForModule(module string) []string {
 	return sm.moduleToStacks[sm.normalizeModuleDir(module)]
 }
 
-// IsStackOwnedDir reports whether the module dir is inside a stack's own
-// declared content paths — the directories named by the stack file's
-// unit/stack `path` attributes. Those paths exist only after `terragrunt
-// stack generate` materializes them (e.g. with no_dot_terragrunt_stack), so
-// they must not become their own Atlantis projects. Directories that merely
-// sit inside the stack's dir without being declared in the stack file are
-// NOT stack-owned (intentional local additions keep their own projects).
+// IsStackOwnedDir reports whether the module dir lives under a stack's
+// directory. An HCL-defined stack owns its ENTIRE directory subtree: no
+// discovery deeper than a terragrunt.stack.hcl should happen, because
+// `terragrunt stack run` plans every unit under the stack dir (classic
+// modules included). Modules under the stack dir therefore get no individual
+// Atlantis project — they are planned as part of the stack. Definition-file
+// stacks (Source empty) own nothing by directory; their members come from
+// explicit Modules matching.
 func (sm *StackManager) IsStackOwnedDir(module string) bool {
 	dir := sm.normalizeModuleDir(module)
 	for _, stack := range sm.stacks {
-		if stack.Name == "" {
+		if stack.Name == "" || stack.Source == "" {
 			continue
 		}
-		for _, p := range stack.DeclaredPaths {
-			// DeclaredPaths entries are already gitRoot-relative full paths.
-			if dir == p || strings.HasPrefix(dir, p+"/") {
-				return true
-			}
+		// stack.Name is the stack file's directory (gitRoot-relative).
+		if dir == stack.Name || strings.HasPrefix(dir, stack.Name+"/") {
+			return true
 		}
 	}
 	return false
