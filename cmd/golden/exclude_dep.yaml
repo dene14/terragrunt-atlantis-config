@@ -7,7 +7,7 @@ projects:
     when_modified:
     - '*.hcl'
     - '*.tf*'
-    - ../dep/terragrunt.hcl
-    - ../dep/shared.tfvars
+    - ../dep/**/*.hcl
+    - ../dep/**/*.tf*
   dir: app
 version: 3

@@ -45,10 +45,8 @@ Mitigations in place:
 The embedded terragrunt library engine is kept for backward compatibility, but
 the direction is a full switch to the terragrunt 1.0 **CLI** (already shipped
 behind `--engine=cli`, the default on terragrunt v1.x installs). The library
-engine is deprecated and **slated for removal in v1.27** — a runtime warning is
-emitted whenever it is used. When the library engine is retired, `go-git`/
-`go-billy` drop out of the build entirely, and the remaining `ignore` entries
-here can be removed.
+engine was removed in **v1.27.0** and with it `go-git`/`go-billy` drop out of
+the build entirely, and the remaining `ignore` entries here can be removed.
 
 If a future terragrunt release re-opens its Go API or ships a stable, patched
 go-git, revisit the ignore list before any upgrade.

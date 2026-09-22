@@ -1,3 +1,0 @@
-locals {
-  env                  = "global-region"
-}

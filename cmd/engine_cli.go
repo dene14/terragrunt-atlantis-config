@@ -112,28 +112,17 @@ func terragruntCLIMajor(bin string) (int, bool) {
 	return major, true
 }
 
-// resolveEngine turns the --engine flag into the engine actually used.
-// auto prefers the CLI engine when a terragrunt v1+ binary is available and
-// falls back to the library engine otherwise, so a new terragrunt install
-// never breaks generation.
-func resolveEngine(gitRoot string) string {
+// validateEngine validates the —engine flag. The library engine was removed
+// in v1.27.0 (terragrunt closed its Go API at v1.x); only auto/cli remain,
+// equivalent: both run the cli engine against a terragrunt v1+ binary.
+func validateEngine() error {
 	switch engine {
-	case engineLibrary, engineCLI:
-		return engine
-	case engineAuto:
-		bin, err := locateTerragruntCLI()
-		if err != nil {
-			log.Debugf("engine=auto: no terragrunt binary, using library engine")
-			return engineLibrary
-		}
-		if major, ok := terragruntCLIMajor(bin); ok && major >= 1 {
-			log.Debugf("engine=auto: terragrunt v%d detected, using cli engine", major)
-			return engineCLI
-		}
-		log.Debugf("engine=auto: terragrunt v0.x detected, using library engine")
-		return engineLibrary
+	case engineCLI, engineAuto:
+		return nil
+	case engineLibrary:
+		return fmt.Errorf("--engine=library was removed in v1.27.0: terragrunt closed its Go API at v1.x, so the embedded parsing library can't track it. Install terragrunt v1+ and use the default (cli) engine — semantics now always match the terragrunt you run")
 	default:
-		return engineLibrary
+		return fmt.Errorf("unknown --engine value %q (want cli or auto)", engine)
 	}
 }
 
@@ -453,22 +442,21 @@ func normalizeFilterPaths(filters []string, root string) []string {
 
 // cliEngineProjects converts discovered components into Atlantis projects.
 func cliEngineProjects(components []cliComponent, root string) ([]AtlantisProject, error) {
-	// Same skip-parents default as the library engine: configs with no
-	// terraform source (root includes, wrapper files) are not projects.
-	if ignoreParentTerragrunt {
-		in := components[:0]
-		for _, c := range components {
-			if c.Type == "stack" {
-				in = append(in, c)
-				continue
-			}
-			cfg := filepath.Join(root, filepath.FromSlash(c.Path), "terragrunt.hcl")
-			if hasTerraformSource(cfg) {
-				in = append(in, c)
-			}
+	// Parent-only configs (no terraform source, no include) are not projects.
+	// Terragrunt's list command returns them; we drop them here so the output
+	// doesn't change shape depending on terragrunt internals.
+	in := components[:0]
+	for _, c := range components {
+		if c.Type == "stack" {
+			in = append(in, c)
+			continue
 		}
-		components = in
+		cfg := filepath.Join(root, filepath.FromSlash(c.Path), "terragrunt.hcl")
+		if hasTerraformSource(cfg) {
+			in = append(in, c)
+		}
 	}
+	components = in
 
 	// Honour terragrunt's own `exclude` blocks. This is the CLI engine's
 	// equivalent of the library engine's `atlantis_skip` local: terragrunt
@@ -707,10 +695,6 @@ func applyCLIOrdering(projects []AtlantisProject, direct map[string][]string) {
 // pipeline, producing the same AtlantisProject values the library engine
 // produces so all downstream merging/writing logic is shared.
 func generateProjectsWithCLIEngine(root string) ([]AtlantisProject, error) {
-	if len(projectHclFiles) > 0 {
-		return nil, cliEngineError("--project-hcl-files is not supported with --engine=cli")
-	}
-
 	bin, err := locateTerragruntCLI()
 	if err != nil {
 		return nil, err
@@ -738,27 +722,4 @@ func generateProjectsWithCLIEngine(root string) ([]AtlantisProject, error) {
 	log.Infof("cli engine: discovered %d units and %d stacks via terragrunt", nUnits, nStacks)
 
 	return cliEngineProjects(components, root)
-}
-
-// warnLibraryEngineDeprecation prints a single, prominent heads-up whenever
-// the embedded terragrunt library engine is actually in use, steering users
-// toward the CLI engine (and terragrunt v1.x). The library engine is slated
-// for removal: v0.99.x is the last terragrunt release with a consumable Go
-// API, and the v1.x CLI already provides full coverage.
-func warnLibraryEngineDeprecation() {
-	log.Warnf(
-		"deprecated: the embedded terragrunt library engine (--engine=library) is frozen at terragrunt v0.99.x and will be removed in v1.27 of terragrunt-atlantis-config. Migrate to the CLI engine: upgrade terragrunt to v1.x (or run --engine=cli with a v1.x binary on PATH); --engine=auto does this automatically once terragrunt v1+ is installed.",
-	)
-}
-
-// warnStacksDeprecation heads users off the stacks flag. Stacks support (via
-// terragrunt.stack.hcl + `terragrunt stack run`) is native terragrunt 1.x
-// behavior: the fork only needs to know that a stack owns its whole directory
-// subtree so no standalone projects are emitted underneath it. That logic is
-// moving into the CLI engine's native discovery and the flag is slated for
-// removal alongside the library engine in v1.27.
-func warnStacksDeprecation() {
-	log.Warnf(
-		"deprecated: --enable-stacks will be removed in v1.27 of terragrunt-atlantis-config, together with the library engine. With terragrunt v1.x the CLI engine handles stacks natively (a terragrunt.stack.hcl owns its whole directory subtree); run with --engine=cli and a terragrunt v1+ binary to be ready.",
-	)
 }

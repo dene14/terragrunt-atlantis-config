@@ -7,6 +7,7 @@ import "testing"
 
 // Locals win without any flag involvement.
 func TestTerraformDistributionLocal(t *testing.T) {
+	terragruntCLIOrSkip(t)
 	runTest(t, "golden/terraform_distribution_local.yaml", []string{
 		"--root", "../test_examples_issues/terraform_distribution",
 	})
@@ -14,6 +15,7 @@ func TestTerraformDistributionLocal(t *testing.T) {
 
 // The flag sets a default for every project.
 func TestTerraformDistributionFlag(t *testing.T) {
+	terragruntCLIOrSkip(t)
 	// package-level flag state must not leak into other suite tests
 	defer func() { defaultTerraformDistribution = "" }()
 
