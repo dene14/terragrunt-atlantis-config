@@ -54,7 +54,9 @@ jobs:
       # publishes the built binaries + checksums onto the tag-triggered release.
       - uses: softprops/action-gh-release@v3
         with:
-          prerelease: false
+          # Mark tags with -alpha/-beta/-rc suffixes as pre-release
+          # (so alphas don't override "Latest" for stable releases)
+          prerelease: ${{ contains(github.ref, '-alpha') || contains(github.ref, '-beta') || contains(github.ref, '-rc') }}
           files: |
             build/${{ steps.get_version.outputs.VERSION }}/*
             SHA256SUMS
