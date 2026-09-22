@@ -1,34 +1,26 @@
 # Terragrunt Stacks Support
 
-This fork adds support for [Terragrunt stacks](https://terragrunt.gruntwork.io/docs/features/stacks/)
-to `terragrunt-atlantis-config`. All stack functionality is **opt-in** via `--enable-stacks`;
-without the flag the output is byte-identical to upstream behavior.
+This tool treats every [terragrunt stack](https://terragrunt.gruntwork.io/docs/features/stacks/)
+as one Atlantis project. Discovery is native to terragrunt (we ask it directly
+via `terragrunt find`), and no extra flags are needed.
 
-## Quick start
+Since v1.27 the library-era switches are gone (`--enable-stacks`,
+`--stack-definition-file`): a `terragrunt.stack.hcl` is enough. The stack owns
+its whole directory subtree — everything under it is stack-run content and
+never becomes an Atlantis project of its own.
 
 ```bash
 terragrunt-atlantis-config generate \
   --root . \
-  --enable-stacks \
   --stack-workflow terragrunt-stack \
   --output atlantis.yaml
 ```
 
-Flags:
+Flag:
 
-| Flag                      | Description                                                                                |
-| ------------------------- | ------------------------------------------------------------------------------------------ |
-| `--enable-stacks`         | Enable stack discovery and stack project generation (**deprecated**, see below)             |
-| `--stack-workflow`        | Workflow for stack projects (falls back to `--workflow`)                                   |
-| `--stack-definition-file` | Additional YAML/JSON file declaring stacks, relative to `--root` unless absolute           |
-
-> **Deprecation**: `--enable-stacks` will be removed in **v1.27** of terragrunt-atlantis-config,
-> together with `--engine=library`. Stack handling is native terragrunt 1.x behavior — the fork
-> only needs to know that a `terragrunt.stack.hcl` owns its whole directory subtree so no
-> standalone projects are emitted underneath it — and that logic is moving into the CLI engine's
-> native discovery. Run with `--engine=cli` and a terragrunt v1+ binary to be ready. Until then,
-> the behavior described on this page is gated behind `--enable-stacks`; without the flag the
-> output is byte-identical to upstream behavior.
+| Flag               | Description                                                              |
+| ------------------ | ------------------------------------------------------------------------ |
+| `--stack-workflow` | Workflow for stack projects (falls back to `--workflow`/stack setting)   |
 
 Global flags `--autoplan`, `--terraform-version`, `--create-workspace`, `--create-project-name`
 and `--workflow` apply to stack projects the same way they apply to regular projects.

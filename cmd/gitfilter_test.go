@@ -56,6 +56,7 @@ terraform {
 }
 
 func TestFilterGitKeepsOnlyChangedProject(t *testing.T) {
+	terragruntCLIOrSkip(t)
 	repo := t.TempDir()
 	writeRepoWith(t, repo)
 
@@ -87,6 +88,7 @@ func TestFilterGitKeepsOnlyChangedProject(t *testing.T) {
 }
 
 func TestFilterGitDependencyMatch(t *testing.T) {
+	terragruntCLIOrSkip(t)
 	repo := t.TempDir()
 	writeRepoWith(t, repo)
 
@@ -117,6 +119,7 @@ func TestFilterGitDependencyMatch(t *testing.T) {
 }
 
 func TestFilterGitCleanTreeKeepsNothing(t *testing.T) {
+	terragruntCLIOrSkip(t)
 	repo := t.TempDir()
 	writeRepoWith(t, repo)
 

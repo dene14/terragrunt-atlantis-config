@@ -14,5 +14,4 @@ projects:
     - '*.hcl'
     - '*.tf*'
   dir: tofu
-  terraform_distribution: tofu
 version: 3

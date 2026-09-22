@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -9,28 +10,29 @@ import (
 	"github.com/ghodss/yaml"
 )
 
-func TestResolveEngineForced(t *testing.T) {
+// --engine acceptance after the library removal: cli/auto accepted, library
+// rejected with a migration note, anything else errors.
+func TestValidateEngine(t *testing.T) {
 	old := engine
 	defer func() { engine = old }()
 
-	engine = engineLibrary
-	if got := resolveEngine("."); got != engineLibrary {
-		t.Fatalf("expected library, got %s", got)
-	}
 	engine = engineCLI
-	if got := resolveEngine("."); got != engineCLI {
-		t.Fatalf("expected cli, got %s", got)
+	if err := validateEngine(); err != nil {
+		t.Fatalf("cli must validate, got %v", err)
 	}
-}
-
-func TestResolveEngineAutoWithoutBinary(t *testing.T) {
-	old := engine
-	defer func() { engine = old }()
 	engine = engineAuto
-	t.Setenv("PATH", t.TempDir())
-
-	if got := resolveEngine("."); got != engineLibrary {
-		t.Fatalf("expected library fallback without terragrunt binary, got %s", got)
+	if err := validateEngine(); err != nil {
+		t.Fatalf("auto must validate, got %v", err)
+	}
+	engine = engineLibrary
+	if err := validateEngine(); err == nil {
+		t.Fatal("library must be rejected")
+	} else if !strings.Contains(err.Error(), "removed in v1.27.0") {
+		t.Fatalf("expected removal note, got %v", err)
+	}
+	engine = "bogus"
+	if err := validateEngine(); err == nil {
+		t.Fatal("bogus engine must be rejected")
 	}
 }
 
@@ -237,20 +239,29 @@ func TestCLIOrderingHandlesBackslashEdges(t *testing.T) {
 	}
 
 	oldEOG, oldDO, oldPN, oldCascade := executionOrderGroups, dependsOn, createProjectName, cascadeDependencies
-	oldIgnoreParent := ignoreParentTerragrunt
 	defer func() {
 		executionOrderGroups, dependsOn, createProjectName, cascadeDependencies = oldEOG, oldDO, oldPN, oldCascade
-		ignoreParentTerragrunt = oldIgnoreParent
 	}()
 	executionOrderGroups, dependsOn, createProjectName = true, true, true
 	// direct-edge depends_on keeps assertions simple; cascaded closure is
 	// covered by the contract suite
 	cascadeDependencies = false
-	// synthetic components have no real terragrunt.hcl on disk: skip the
-	// parent-detection probe, it is covered by the contract suite
-	ignoreParentTerragrunt = false
 
-	projects, err := cliEngineProjects(components, ".")
+	// synthetic components have no real terragrunt.hcl on disk: they'd all
+	// fail the parent-probe (no module content). For this ordering-specific
+	// test we write minimal valid configs under a temp root instead.
+	root := t.TempDir()
+	for _, c := range components {
+		dir := filepath.Join(root, c.Path)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "terragrunt.hcl"), []byte("terraform {\n  source = \"x\"\n}\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	projects, err := cliEngineProjects(components, root)
 	if err != nil {
 		t.Fatal(err)
 	}

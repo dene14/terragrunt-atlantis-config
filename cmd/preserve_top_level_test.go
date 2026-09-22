@@ -16,6 +16,7 @@ import (
 //
 // User-owned top-level keys must survive regeneration verbatim.
 func TestUserOwnedTopLevelKeysPreserved(t *testing.T) {
+	terragruntCLIOrSkip(t)
 	if err := resetForRun(); err != nil {
 		t.Fatal(err)
 	}
@@ -58,6 +59,7 @@ checkout_strategy: merge
 
 // An explicit flag must win over a previously preserved value.
 func TestDeleteSourceBranchOnMergeFlagOverridesPreserved(t *testing.T) {
+	terragruntCLIOrSkip(t)
 	if err := resetForRun(); err != nil {
 		t.Fatal(err)
 	}

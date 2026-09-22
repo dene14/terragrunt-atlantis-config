@@ -12,6 +12,7 @@ import (
 // without --output, the generated atlantis config must go to STDOUT so it can
 // be piped to other tools; only diagnostics belong to STDERR.
 func TestStdoutOutputWhenNoOutputFlag(t *testing.T) {
+	terragruntCLIOrSkip(t)
 	if err := resetForRun(); err != nil {
 		t.Fatal(err)
 	}
@@ -67,6 +68,7 @@ func TestStdoutOutputWhenNoOutputFlag(t *testing.T) {
 // With --output set, the config goes to the file and NOT to stdout; logs keep
 // going to stderr. Companion case to TestStdoutOutputWhenNoOutputFlag.
 func TestOutputFlagWritesFileNotStdout(t *testing.T) {
+	terragruntCLIOrSkip(t)
 	if err := resetForRun(); err != nil {
 		t.Fatal(err)
 	}
