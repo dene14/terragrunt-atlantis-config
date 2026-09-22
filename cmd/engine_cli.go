@@ -349,6 +349,11 @@ func stackLocalSourceDirs(stackFile string, root string) []string {
 		if !filepath.IsAbs(src) {
 			src = filepath.Clean(filepath.Join(stackDir, src))
 		}
+		// Only directories that exist today are watched: a stack run may
+		// reference generated-only / remote sources that nothing in-repo knows.
+		if !isDir(src) {
+			return
+		}
 		if rel, err := filepath.Rel(root, src); err == nil && !strings.HasPrefix(rel, "..") {
 			dirs = append(dirs, filepath.ToSlash(rel))
 		}

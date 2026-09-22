@@ -1,0 +1,37 @@
+automerge: false
+parallel_apply: true
+parallel_plan: true
+projects:
+- autoplan:
+    enabled: false
+    when_modified:
+    - '**/*.hcl'
+    - '**/*.tf*'
+    - '*.hcl'
+    - '*.tf*'
+  dir: live/prod
+  execution_order_group: 0
+  name: live_prod
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - ../../../../../repo_root.hcl
+    - ../state/**/*.hcl
+    - ../state/**/*.tf*
+  depends_on:
+  - providers_aws_prod_us-east-1_state
+  dir: providers/aws/prod/us-east-1/dns
+  execution_order_group: 1
+  name: providers_aws_prod_us-east-1_dns
+- autoplan:
+    enabled: false
+    when_modified:
+    - '*.hcl'
+    - '*.tf*'
+    - ../../../../../repo_root.hcl
+  dir: providers/aws/prod/us-east-1/state
+  execution_order_group: 0
+  name: providers_aws_prod_us-east-1_state
+version: 3
